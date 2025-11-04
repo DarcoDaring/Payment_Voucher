@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="text-center">
+
+        <!-- FOR ALL AUTHENTICATED USERS -->
+        {% if user.is_authenticated %}
+        <div class="mb-4 d-flex justify-content-center gap-3 flex-wrap">
+            <a href="{% url 'voucher_list' %}" class="btn btn-primary btn-lg px-5 shadow-sm">
+                View Vouchers
+            </a>
+
+            <!-- CREATE VOUCHER BUTTON FOR ACCOUNTANTS -->
+            {% if user.groups.all.0.name == 'Accountants' %}
+            <button class="btn btn-success btn-lg px-5 shadow-sm" 
+                    data-bs-toggle="modal" 
+                    data-bs-target="#createVoucherModal">
+                Create Voucher
+            </button>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- SUPERUSER ONLY -->
+        {% if user.is_superuser %}
+        <div class="d-flex justify-content-center gap-3 flex-wrap mt-4">
+            <a href="{% url 'create_user' %}" class="btn btn-warning btn-lg px-5 shadow-sm text-decoration-none">
+                Create User
+            </a>
+            <button class="btn btn-warning btn-lg px-5 shadow-sm" 
+                    data-bs-toggle="modal" 
+                    data-bs-target="#createDesignationModal">
+                Create Designation
+            </button>
+            <button class="btn btn-warning btn-lg px-5 shadow-sm" 
+                    data-bs-toggle="modal" 
+                    data-bs-target="#approvalControlModal">
+                Control Approval
+            </button>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

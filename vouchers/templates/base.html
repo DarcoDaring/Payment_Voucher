@@ -1,0 +1,561 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Voucher Approval System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11/font/bootstrap-icons.css">
+    <style>
+        .btn-warning { min-width: 180px; }
+        .btn-lg { min-height: 50px; }
+        .file-name { font-size: 0.9em; color: #555; }
+
+        /* WIDER CREATE VOUCHER MODAL */
+        #createVoucherModal .modal-dialog {
+            max-width: 90vw !important;
+            width: 1400px;
+            margin: 1.75rem auto;
+        }
+
+        @media (max-width: 1500px) {
+            #createVoucherModal .modal-dialog {
+                width: 95vw;
+            }
+        }
+
+        #createVoucherModal .modal-body {
+            max-height: 75vh;
+            overflow-y: auto;
+        }
+
+        /* Optional: Improve table readability */
+        #particularsTable th, #particularsTable td {
+            vertical-align: middle;
+        }
+    </style>
+
+    <!-- CSRF TOKEN IN JS (GLOBAL & SAFE) -->
+    <script>
+        window.csrfToken = "{{ csrf_token }}";
+    </script>
+</head>
+<body>
+
+    <!-- NAVBAR -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="{% url 'home' %}">Voucher System</a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="{% url 'voucher_list' %}">Vouchers</a>
+
+                {% if user.is_authenticated %}
+                    {% if user.groups.all.0.name == 'Admin Staff' or user.is_superuser %}
+                        <a class="nav-link" href="{% url 'admin:index' %}">Admin</a>
+                    {% endif %}
+
+                    <a class="nav-link" data-bs-toggle="modal" data-bs-target="#logoutModal" style="cursor:pointer;">
+                        Logout
+                    </a>
+                {% else %}
+                    <a class="nav-link" href="{% url 'login' %}">Login</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <!-- FLASH MESSAGES -->
+    {% if messages %}
+        <div class="container mt-3">
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <!-- MAIN CONTENT -->
+    <div class="container mt-4">
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- LOGOUT MODAL -->
+    {% if user.is_authenticated %}
+    <div class="modal fade" id="logoutModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirm Logout</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to log out?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <form method="post" action="{% url 'logout' %}" class="d-inline">
+                        <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+                        <button type="submit" class="btn btn-danger">Yes, Logout</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- CREATE DESIGNATION MODAL -->
+    <div class="modal fade" id="createDesignationModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form id="createDesignationForm">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Create New Designation</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="designation_name" class="form-label">Designation Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="designation_name" name="name" required maxlength="100">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success">Create</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- CONTROL APPROVAL MODAL -->
+    {% if user.is_superuser %}
+    <div class="modal fade" id="approvalControlModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Control Approval Workflow</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted">Select which designations can approve vouchers.</p>
+                    <form id="approvalControlForm">
+                        <div class="row">
+                            {% for designation in designations %}
+                            <div class="col-md-6 mb-2">
+                                <div class="form-check">
+                                    <input class="form-check-input designation-checkbox" 
+                                           type="checkbox" 
+                                           value="{{ designation.id }}" 
+                                           id="des_{{ designation.id }}">
+                                    <label class="form-check-label" for="des_{{ designation.id }}">
+                                        {{ designation.name }}
+                                    </label>
+                                </div>
+                            </div>
+                            {% empty %}
+                            <div class="col-12">
+                                <p class="text-muted">No designations. Create one first.</p>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </form>
+                    <div class="mt-3">
+                        <small class="text-success fw-bold" id="activeCount">0 active</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="saveApprovalControl">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- CREATE VOUCHER MODAL (ACCOUNTANTS ONLY) -->
+    {% if user.is_authenticated and user.groups.all.0.name == 'Accountants' %}
+    <div class="modal fade" id="createVoucherModal" tabindex="-1" aria-labelledby="createVoucherModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="createVoucherModalLabel">Create New Voucher</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="createVoucherForm" enctype="multipart/form-data">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="voucher_date" class="form-label">Voucher Date <span class="text-danger">*</span></label>
+                                <input type="date" class="form-control" id="voucher_date" name="voucher_date" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="payment_type" class="form-label">Payment Type <span class="text-danger">*</span></label>
+                                <select class="form-select" id="payment_type" name="payment_type" required>
+                                    <option value="CASH">Cash</option>
+                                    <option value="CHEQUE">Cheque</option>
+                                    <option value="PETTY_CASH">Petty Cash</option>
+                                </select>
+                            </div>
+
+                            <!-- CHEQUE NUMBER FIELD (HIDDEN BY DEFAULT) -->
+                            <div class="col-md-6" id="chequeNumberField" style="display: none;">
+                                <label for="cheque_number" class="form-label">Cheque Number <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="cheque_number" name="cheque_number" 
+                                       placeholder="e.g. 123456" maxlength="20">
+                            </div>
+
+                            <div class="col-md-4">
+                                <label for="name_title" class="form-label">Title <span class="text-danger">*</span></label>
+                                <select class="form-select" id="name_title" name="name_title" required>
+                                    <option value="MR">Mr.</option>
+                                    <option value="MRS">Mrs.</option>
+                                    <option value="MS">Ms.</option>
+                                </select>
+                            </div>
+                            <div class="col-md-8">
+                                <label for="pay_to" class="form-label">Pay To <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="pay_to" name="pay_to" required>
+                            </div>
+                            <div class="col-12">
+                                <label for="attachment" class="form-label">Main Attachment <span class="text-danger">*</span></label>
+                                <input type="file" class="form-control" id="attachment" name="attachment" required>
+                                <div class="mt-2 text-muted file-name" id="fileName"></div>
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <div class="mb-3">
+                            <label class="form-label">Particulars <span class="text-danger">*</span></label>
+                            <table class="table table-sm table-bordered" id="particularsTable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th width="40%">Description</th>
+                                        <th width="20%">Amount</th>
+                                        <th width="30%">Attachment (Optional)</th>
+                                        <th width="10%"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="particularsBody">
+                                    <tr>
+                                        <td><input type="text" class="form-control form-control-sm" name="particulars[0][description]" required></td>
+                                        <td><input type="number" step="0.01" class="form-control form-control-sm" name="particulars[0][amount]" required></td>
+                                        <td><input type="file" class="form-control form-control-sm" name="particulars[0][attachment]"></td>
+                                        <td><button type="button" class="btn btn-sm btn-danger remove-row">Remove</button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <button type="button" class="btn btn-sm btn-primary" id="addParticular">Add Row</button>
+                        </div>
+
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary btn-lg">Submit Voucher</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- BOOTSTRAP & JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- GLOBAL JS (ALL AJAX USES window.csrfToken) -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const getCsrfToken = () => window.csrfToken;
+
+        // === CREATE DESIGNATION ===
+        const createForm = document.getElementById('createDesignationForm');
+        if (createForm) {
+            createForm.addEventListener('submit', function (e) {
+                e.preventDefault();
+                const name = this.querySelector('#designation_name').value.trim();
+                if (!name) return alert('Name required');
+
+                fetch("{% url 'designation_create_api' %}", {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCsrfToken(),
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name })
+                })
+                .then(r => r.json())
+                .then(d => {
+                    if (d.id) {
+                        alert('Designation created!');
+                        bootstrap.Modal.getInstance(document.getElementById('createDesignationModal')).hide();
+                        location.reload();
+                    } else {
+                        alert('Error: ' + (d.error || 'Failed'));
+                    }
+                });
+            });
+        }
+
+        // === CONTROL APPROVAL ===
+        {% if user.is_superuser and request.resolver_match.url_name == 'home' %}
+        const controlModal = document.getElementById('approvalControlModal');
+        if (controlModal) {
+            fetch("{% url 'approval_control_api' %}", {
+                method: 'GET',
+                headers: { 'X-CSRFToken': getCsrfToken() }
+            })
+            .then(r => r.json())
+            .then(data => {
+                document.querySelectorAll('.designation-checkbox').forEach(cb => {
+                    if (data.active_designations.includes(parseInt(cb.value))) cb.checked = true;
+                });
+                updateCount();
+            });
+
+            document.getElementById('saveApprovalControl').addEventListener('click', () => {
+                const active = Array.from(document.querySelectorAll('.designation-checkbox:checked')).map(cb => cb.value);
+                fetch("{% url 'approval_control_api' %}", {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCsrfToken(),
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ active_designations: active })
+                })
+                .then(r => r.json())
+                .then(d => {
+                    alert(d.message || 'Saved!');
+                    bootstrap.Modal.getInstance(controlModal).hide();
+                    location.reload();
+                });
+            });
+
+            function updateCount() {
+                const count = document.querySelectorAll('.designation-checkbox:checked').length;
+                document.getElementById('activeCount').textContent = `${count} active`;
+            }
+            document.querySelectorAll('.designation-checkbox').forEach(cb => cb.addEventListener('change', updateCount));
+        }
+        {% endif %}
+
+        // === CREATE VOUCHER ===
+        const voucherModal = document.getElementById('createVoucherModal');
+        if (voucherModal) {
+            const form = document.getElementById('createVoucherForm');
+            const tbody = document.getElementById('particularsBody');
+            const addBtn = document.getElementById('addParticular');
+            let index = 1;
+
+            // === CHEQUE NUMBER TOGGLE ===
+            const paymentTypeSelect = document.getElementById('payment_type');
+            const chequeField = document.getElementById('chequeNumberField');
+            const chequeInput = document.getElementById('cheque_number');
+
+            function toggleChequeField() {
+                if (paymentTypeSelect.value === 'CHEQUE') {
+                    chequeField.style.display = 'block';
+                    chequeInput.setAttribute('required', 'required');
+                } else {
+                    chequeField.style.display = 'none';
+                    chequeInput.removeAttribute('required');
+                    chequeInput.value = '';
+                }
+            }
+
+            paymentTypeSelect.addEventListener('change', toggleChequeField);
+            toggleChequeField(); // Run on load
+
+            document.getElementById('attachment').addEventListener('change', function () {
+                const fileName = this.files[0]?.name || '';
+                document.getElementById('fileName').textContent = fileName ? `Selected: ${fileName}` : '';
+            });
+
+            addBtn.addEventListener('click', () => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><input type="text" class="form-control form-control-sm" name="particulars[${index}][description]" required></td>
+                    <td><input type="number" step="0.01" class="form-control form-control-sm" name="particulars[${index}][amount]" required></td>
+                    <td><input type="file" class="form-control form-control-sm" name="particulars[${index}][attachment]"></td>
+                    <td><button type="button" class="btn btn-sm btn-danger remove-row">Remove</button></td>
+                `;
+                tbody.appendChild(row);
+                index++;
+            });
+
+            tbody.addEventListener('click', e => {
+                if (e.target.classList.contains('remove-row') && tbody.children.length > 1) {
+                    e.target.closest('tr').remove();
+                }
+            });
+
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+
+                const voucherDate = document.getElementById('voucher_date').value;
+                const paymentType = document.getElementById('payment_type').value;
+                const nameTitle = document.getElementById('name_title').value;
+                const payTo = document.getElementById('pay_to').value.trim();
+                const attachment = document.getElementById('attachment').files[0];
+
+                if (!voucherDate || !paymentType || !nameTitle || !payTo || !attachment) {
+                    return alert('Please fill all required fields including main attachment.');
+                }
+
+                const formData = new FormData();
+                formData.append('voucher_date', voucherDate);
+                formData.append('payment_type', paymentType);
+                formData.append('name_title', nameTitle);
+                formData.append('pay_to', payTo);
+                formData.append('attachment', attachment);
+
+                // === ADD CHEQUE NUMBER IF CHEQUE ===
+                if (paymentType === 'CHEQUE') {
+                    const chequeNum = chequeInput.value.trim();
+                    if (!chequeNum) {
+                        return alert('Cheque number is required.');
+                    }
+                    formData.append('cheque_number', chequeNum);
+                }
+
+                let valid = true;
+                document.querySelectorAll('#particularsBody tr').forEach((row, i) => {
+                    const desc = row.querySelector('input[name$="[description]"]').value.trim();
+                    const amt = row.querySelector('input[name$="[amount]"]').value.trim();
+                    const fileInput = row.querySelector('input[name$="[attachment]"]');
+                    const file = fileInput?.files[0];
+
+                    if (desc && amt) {
+                        formData.append(`particulars[${i}][description]`, desc);
+                        formData.append(`particulars[${i}][amount]`, amt);
+                        if (file) formData.append(`particulars[${i}][attachment]`, file);
+                    } else {
+                        valid = false;
+                    }
+                });
+
+                if (!valid || tbody.children.length === 0) {
+                    return alert('Please provide at least one valid particular.');
+                }
+
+                fetch("{% url 'voucher_create_api' %}", {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': getCsrfToken() },
+                    body: formData
+                })
+                .then(r => {
+                    if (!r.ok) return r.json().then(err => Promise.reject(err));
+                    return r.json();
+                })
+                .then(() => {
+                    alert('Voucher created successfully!');
+                    bootstrap.Modal.getInstance(voucherModal).hide();
+                    form.reset();
+                    document.getElementById('fileName').textContent = '';
+                    tbody.innerHTML = `<tr>
+                        <td><input type="text" class="form-control form-control-sm" name="particulars[0][description]" required></td>
+                        <td><input type="number" step="0.01" class="form-control form-control-sm" name="particulars[0][amount]" required></td>
+                        <td><input type="file" class="form-control form-control-sm" name="particulars[0][attachment]"></td>
+                        <td><button type="button" class="btn btn-sm btn-danger remove-row">Remove</button></td>
+                    </tr>`;
+                    index = 1;
+                    location.reload();
+                })
+                .catch(err => {
+                    const msg = err.error || err.attachment?.[0] || err.particulars?.[0] || JSON.stringify(err);
+                    alert('Failed to create voucher:\n' + msg);
+                });
+            });
+        }
+
+        // === LIVE APPROVE/REJECT (LIST + DETAIL) ===
+        document.querySelectorAll('.approve-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const id = this.dataset.id;
+                const status = this.dataset.status;
+                const isApprove = status === 'APPROVED';
+                const row = this.closest('tr') || this.closest('.card-body');
+
+                const buttons = row ? row.querySelectorAll('.approve-btn') : document.querySelectorAll('.approve-btn');
+                buttons.forEach(b => {
+                    b.disabled = true;
+                    b.style.opacity = '0.6';
+                });
+
+                fetch(`/api/vouchers/${id}/approve/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken()
+                    },
+                    body: JSON.stringify({ status })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    this.textContent = isApprove ? 'Approved' : 'Rejected';
+                    this.className = isApprove ? 'btn btn-success btn-sm' : 'btn btn-danger btn-sm';
+                    this.disabled = true;
+
+                    const other = row.querySelector(`.approve-btn[data-status="${isApprove ? 'REJECTED' : 'APPROVED'}"]`);
+                    if (other) other.style.display = 'none';
+
+                    const badge = row.querySelector('.status-cell .badge') || document.getElementById('status-badge');
+                    if (data.status === 'APPROVED')
+                        badge.innerHTML = '<span class="badge bg-success">Approved</span>';
+                    else if (data.status === 'REJECTED')
+                        badge.innerHTML = '<span class="badge bg-danger">Rejected</span>';
+                    else
+                        badge.innerHTML = `<span class="badge bg-warning text-dark">Pending (${data.approved_count}/${data.required_approvers.length})</span>`;
+
+                    const bar = document.getElementById('progress-bar');
+                    if (bar) {
+                        const total = data.required_approvers.length;
+                        const approved = data.approved_count;
+                        const percent = total > 0 ? (approved / total) * 100 : 0;
+                        bar.style.width = `${percent}%`;
+                        bar.textContent = `${approved} / ${total}`;
+                        document.getElementById('required-list').textContent = `Required: ${data.required_approvers.join(', ')}`;
+                    }
+                })
+                .catch(() => {
+                    alert('Approval failed.');
+                    buttons.forEach(b => {
+                        b.disabled = false;
+                        b.style.opacity = '1';
+                    });
+                });
+            });
+        });
+
+        // === FILTER & SEARCH (LIST ONLY) ===
+        const filterBtns = document.querySelectorAll('.filter-btn');
+        const searchInput = document.getElementById('searchInput');
+        if (filterBtns.length) {
+            filterBtns.forEach(btn => {
+                btn.addEventListener('click', function () {
+                    filterBtns.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    const status = this.dataset.status;
+                    document.querySelectorAll('.voucher-row').forEach(row => {
+                        row.style.display = (status === '' || row.dataset.status === status) ? '' : 'none';
+                    });
+                });
+            });
+        }
+
+        if (searchInput) {
+            searchInput.addEventListener('input', function () {
+                const q = this.value.toLowerCase();
+                document.querySelectorAll('.voucher-row').forEach(row => {
+                    const payTo = (row.dataset.payTo || '').toLowerCase();
+                    const particulars = (row.dataset.particulars || '').toLowerCase();
+                    row.style.display = (payTo.includes(q) || particulars.includes(q)) ? '' : 'none';
+                });
+            });
+        }
+    });
+    </script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

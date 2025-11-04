@@ -1,0 +1,252 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load voucher_tags %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-4">Voucher List</h2>
+
+    <!-- ACTION BAR -->
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div class="btn-group" role="group">
+            {% if user.groups.all.0.name == 'Accountants' %}
+            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createVoucherModal">
+                Create Voucher
+            </button>
+            {% endif %}
+            <button class="btn btn-outline-primary filter-btn active" data-status="">All</button>
+            <button class="btn btn-outline-warning filter-btn" data-status="PENDING">Pending</button>
+            <button class="btn btn-outline-success filter-btn" data-status="APPROVED">Approved</button>
+            <button class="btn btn-outline-danger filter-btn" data-status="REJECTED">Rejected</button>
+        </div>
+        <div class="input-group" style="width: 300px;">
+            <span class="input-group-text">Search</span>
+            <input type="text" id="searchInput" class="form-control"
+                   placeholder="Pay To or Particulars..." autocomplete="off">
+        </div>
+    </div>
+
+    <!-- TABLE – NO ATTACHMENTS COLUMN -->
+    <div class="table-responsive">
+        <table class="table table-striped table-hover align-middle" id="voucherTable">
+            <thead class="table-primary">
+                <tr>
+                    <th>Voucher Number</th>
+                    <th>Pay To</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th>Created By</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for voucher in vouchers %}
+                <tr class="voucher-row"
+                    data-voucher-id="{{ voucher.id }}"
+                    data-status="{{ voucher.status }}"
+                    data-pay-to="{{ voucher.pay_to|lower }}"
+                    data-particulars="{% for p in voucher.particulars.all %}{{ p.description|lower }}{% if not forloop.last %} {% endif %}{% endfor %}">
+
+                    <td><strong>{{ voucher.voucher_number }}</strong></td>
+
+                    <td>{{ voucher.name_title }} {{ voucher.pay_to }}</td>
+
+                    <td>
+                        {% if voucher.particulars.exists %}
+                            <strong>{{ voucher.particulars.all|sum_particulars|floatformat:2 }}</strong><br>
+                            <small class="text-muted">
+                                ({{ voucher.particulars.all|length }} item{{ voucher.particulars.all|length|pluralize }})
+                            </small>
+                        {% else %}
+                            <em class="text-muted">No particulars</em>
+                        {% endif %}
+                    </td>
+
+                    <!-- STATUS -->
+                    <td class="status-cell">
+                        <a href="#" class="status-link"
+                           data-bs-toggle="modal"
+                           data-bs-target="#approvalModal{{ voucher.id }}">
+                            {% if voucher.status == 'PENDING' %}
+                                <span class="badge bg-warning text-dark">
+                                    Pending ({{ voucher.approved_count|default:0 }}/{{ voucher.required_approvers|length }})
+                                </span>
+                            {% elif voucher.status == 'APPROVED' %}
+                                <span class="badge bg-success">Approved</span>
+                            {% elif voucher.status == 'REJECTED' %}
+                                <span class="badge bg-danger">Rejected</span>
+                            {% endif %}
+                        </a>
+                    </td>
+
+                    <td>{{ voucher.created_by.username }}</td>
+
+                    <!-- ACTIONS -->
+                    <td class="action-cell">
+                        <a href="{% url 'voucher_detail' voucher.id %}"
+                           class="btn btn-info btn-sm">View</a>
+
+                        {% if user.groups.all.0.name == 'Admin Staff' and voucher.status == 'PENDING' %}
+                            {% if voucher.user_approval %}
+                                {% if voucher.user_approval.status == 'APPROVED' %}
+                                    <span class="badge bg-success">Approved</span>
+                                {% else %}
+                                    <span class="badge bg-danger">Rejected</span>
+                                {% endif %}
+                            {% else %}
+                                <button class="btn btn-success btn-sm approve-btn"
+                                        data-id="{{ voucher.id }}" data-status="APPROVED">Approve</button>
+                                <button class="btn btn-danger btn-sm approve-btn"
+                                        data-id="{{ voucher.id }}" data-status="REJECTED">Reject</button>
+                            {% endif %}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="text-center text-muted py-4">No vouchers found.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- APPROVAL MODALS (unchanged) -->
+    {% for voucher in vouchers %}
+    <div class="modal fade" id="approvalModal{{ voucher.id }}" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Approval Details - {{ voucher.voucher_number }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <h6 class="text-success">Approved ({{ voucher.approved_count|default:0 }})</h6>
+                            <ul class="list-group">
+                                {% for approval in voucher.approvals.all %}
+                                    {% if approval.status == 'APPROVED' %}
+                                        <li class="list-group-item d-flex justify-content-between">
+                                            <span>{{ approval.approver.username }}</span>
+                                            <small class="text-muted">{{ approval.approved_at|date:"d M H:i" }}</small>
+                                        </li>
+                                    {% endif %}
+                                {% empty %}
+                                    <li class="list-group-item text-muted">None</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        <div class="col-md-4">
+                            <h6 class="text-danger">Rejected ({{ voucher.rejected_count|default:0 }})</h6>
+                            <ul class="list-group">
+                                {% for approval in voucher.approvals.all %}
+                                    {% if approval.status == 'REJECTED' %}
+                                        <li class="list-group-item d-flex justify-content-between">
+                                            <span>{{ approval.approver.username }}</span>
+                                            <small class="text-muted">{{ approval.approved_at|date:"d M H:i" }}</small>
+                                        </li>
+                                    {% endif %}
+                                {% empty %}
+                                    <li class="list-group-item text-muted">None</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        <div class="col-md-4">
+                            <h6 class="text-secondary">
+                                Pending ({{ voucher.required_approvers|length|sub:voucher.approved_count|default:0 }})
+                            </h6>
+                            <ul class="list-group">
+                                {% for item in voucher.pending_approvers %}
+                                    {% if not item.has_approved %}
+                                        <li class="list-group-item">{{ item.name }}</li>
+                                    {% endif %}
+                                {% empty %}
+                                    <li class="list-group-item text-muted">No one required</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+    // FILTER & SEARCH
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            const status = this.dataset.status;
+            document.querySelectorAll('.voucher-row').forEach(row => {
+                row.style.display = (status === '' || row.dataset.status === status) ? '' : 'none';
+            });
+        });
+    });
+
+    document.getElementById('searchInput').addEventListener('input', function () {
+        const q = this.value.toLowerCase();
+        document.querySelectorAll('.voucher-row').forEach(row => {
+            const payTo = row.dataset.payTo;
+            const particulars = row.dataset.particulars;
+            row.style.display = (payTo.includes(q) || particulars.includes(q)) ? '' : 'none';
+        });
+    });
+
+    // LIVE APPROVE / REJECT
+    document.querySelectorAll('.approve-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const id = this.dataset.id;
+            const status = this.dataset.status;
+            const isApprove = status === 'APPROVED';
+            const row = this.closest('tr');
+
+            row.querySelectorAll('.approve-btn').forEach(b => {
+                b.disabled = true;
+                b.style.opacity = '0.6';
+            });
+
+            fetch(`/api/vouchers/${id}/approve/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrf
+                },
+                body: JSON.stringify({ status })
+            })
+            .then(r => r.json())
+            .then(data => {
+                this.textContent = isApprove ? 'Approved' : 'Rejected';
+                this.className = isApprove ? 'btn btn-success btn-sm' : 'btn btn-danger btn-sm';
+                this.disabled = true;
+
+                const other = row.querySelector(`.approve-btn[data-status="${isApprove ? 'REJECTED' : 'APPROVED'}"]`);
+                if (other) other.style.display = 'none';
+
+                const badge = row.querySelector('.status-cell .badge');
+                if (data.status === 'APPROVED')
+                    badge.outerHTML = '<span class="badge bg-success">Approved</span>';
+                else if (data.status === 'REJECTED')
+                    badge.outerHTML = '<span class="badge bg-danger">Rejected</span>';
+                else
+                    badge.outerHTML = `<span class="badge bg-warning text-dark">Pending (${data.approved_count}/${data.required_approvers.length})</span>`;
+            })
+            .catch(() => {
+                alert('Approval failed.');
+                row.querySelectorAll('.approve-btn').forEach(b => {
+                    b.disabled = false;
+                    b.style.opacity = '1';
+                });
+            });
+        });
+    });
+});
+</script>
+{% endblock %}

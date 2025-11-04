@@ -1,0 +1,9 @@
+Request Data: {'csrfmiddlewaretoken': ['S6mVHgQOYZe8vy9ZZpjWSBnr2ufjanAURc1aTiHqBnqU1rBZq490D4bBjpiznqPs'], 'voucher_date': ['2025-10-24'], 'payment_type': ['CHEQUE'], 'name_title': ['MRS'], 'pay_to': ['Abin'], 'attachment': [''], 'particulars': ['[{"description":"not","amount":8950545}]']}
+Parsed Particulars: [{'description': 'not', 'amount': 8950545}]
+Serializer Errors: {'particulars': [ErrorDetail(string='This field is required.', code='required')]}
+Request Data: {'csrfmiddlewaretoken': ['S6mVHgQOYZe8vy9ZZpjWSBnr2ufjanAURc1aTiHqBnqU1rBZq490D4bBjpiznqPs'], 'voucher_date': ['2025-10-24'], 'payment_type': ['CHEQUE'], 'name_title': ['MRS'], 'pay_to': ['Abin'], 'attachment': [''], 'particulars': ['[{"description":"not","amount":8950545}]']}
+Parsed Particulars: [{'description': 'not', 'amount': 8950545}]
+Serializer Errors: {'particulars': [ErrorDetail(string='This field is required.', code='required')]}
+Request Data: {'csrfmiddlewaretoken': ['S6mVHgQOYZe8vy9ZZpjWSBnr2ufjanAURc1aTiHqBnqU1rBZq490D4bBjpiznqPs'], 'voucher_date': ['2025-10-24'], 'payment_type': ['CHEQUE'], 'name_title': ['MRS'], 'pay_to': ['Abin'], 'attachment': [''], 'particulars': ['[{"description":"not","amount":8950545}]']}
+Parsed Particulars: [{'description': 'not', 'amount': 8950545}]
+Serializer Errors: {'particulars': [ErrorDetail(string='This field is required.', code='required')]}
