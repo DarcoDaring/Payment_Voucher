@@ -25,8 +25,15 @@ SECRET_KEY = 'django-insecure-eht+#foh3tw)@)a8eeefxc^#jbv0^$3g4+*#l56m1(w9pztl*v
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+# OLD (not working)
+# ALLOWED_HOSTS = []
 
+# NEW (FIXED)
+ALLOWED_HOSTS = [
+    'paymentvoucher-production-d63d.up.railway.app',
+    'localhost',
+    '127.0.0.1',
+]
 
 # Application definition
 
