@@ -62,8 +62,11 @@ class VoucherListView(LoginRequiredMixin, ListView):
             'approvals',
             'approvals__approver',
         )
-        if self.request.user.groups.filter(name='Accountants').exists():
-            qs = qs.filter(created_by=self.request.user)
+        # === CHANGE: Superuser sees ALL vouchers, Accountants see only theirs ===
+        if not self.request.user.is_superuser:
+            if self.request.user.groups.filter(name='Accountants').exists():
+                qs = qs.filter(created_by=self.request.user)
+        # === END CHANGE ===
 
         return qs.annotate(
             approved_count=Count(
@@ -100,9 +103,15 @@ class VoucherDetailView(LoginRequiredMixin, DetailView):
     context_object_name = 'voucher'
 
     def get_queryset(self):
-        return super().get_queryset().select_related('created_by').prefetch_related(
+        # === CHANGE: Superuser can view any voucher, Accountants only their own ===
+        qs = super().get_queryset().select_related('created_by').prefetch_related(
             'particulars', 'approvals__approver'
-        ).annotate(
+        )
+        if not self.request.user.is_superuser:
+            if self.request.user.groups.filter(name='Accountants').exists():
+                qs = qs.filter(created_by=self.request.user)
+        # === END CHANGE ===
+        return qs.annotate(
             approved_count=Count(
                 Case(When(approvals__status='APPROVED', then=1)),
                 output_field=IntegerField()
@@ -163,7 +172,7 @@ class VoucherCreateAPI(AccountantRequiredMixin, APIView):
                 except InvalidOperation:
                     return Response(
                         {'particulars': f'Invalid amount for item {i+1}'},
-                            status=status.HTTP_400_BAD_REQUEST
+                        status=status.HTTP_400_BAD_REQUEST
                         )
 
                 particulars.append({
@@ -350,3 +359,19 @@ class UserCreateAPI(APIView):
             return Response({'error': 'Invalid designation'}, status=400)
         except Exception as e:
             return Response({'error': str(e)}, status=500)
+        
+
+class VoucherDeleteAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        if not request.user.is_superuser:
+            return Response({'error': 'Superuser only'}, status=403)
+
+        voucher = get_object_or_404(Voucher, pk=pk)
+        voucher_number = voucher.voucher_number
+        voucher.delete()
+
+        return Response({
+            'message': f'Voucher {voucher_number} deleted successfully.'
+        }, status=200)

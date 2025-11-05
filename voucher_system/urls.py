@@ -8,7 +8,7 @@ from vouchers.views import (
     HomeView, VoucherListView, VoucherDetailView,
     VoucherCreateAPI, VoucherApprovalAPI,
     DesignationCreateAPI, ApprovalControlAPI,
-    UserCreateAPI  # ← NEW: MODAL API
+    UserCreateAPI,VoucherDeleteAPI  # ← NEW: MODAL API
 )
 
 urlpatterns = [
@@ -32,4 +32,5 @@ urlpatterns = [
     # AUTH
     path('accounts/login/', auth_views.LoginView.as_view(template_name='login.html'), name='login'),
     path('accounts/', include('django.contrib.auth.urls')),
+    path('api/vouchers/<int:pk>/delete/', VoucherDeleteAPI.as_view(), name='voucher_delete_api'),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

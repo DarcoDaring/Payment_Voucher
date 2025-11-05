@@ -100,6 +100,15 @@
                                         data-id="{{ voucher.id }}" data-status="REJECTED">Reject</button>
                             {% endif %}
                         {% endif %}
+
+                        <!-- DELETE BUTTON: SUPERUSER ONLY -->
+                        {% if user.is_superuser %}
+                        <button class="btn btn-danger btn-sm delete-voucher-btn"
+                                data-id="{{ voucher.id }}"
+                                data-number="{{ voucher.voucher_number }}">
+                            <i class="bi bi-trash"></i> Delete
+                        </button>
+                        {% endif %}
                     </td>
                 </tr>
                 {% empty %}
@@ -173,11 +182,33 @@
         </div>
     </div>
     {% endfor %}
+
+    <!-- DELETE VOUCHER MODAL -->
+    <div class="modal fade" id="deleteVoucherModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">Confirm Delete</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to <strong>permanently delete</strong> voucher:</p>
+                    <p class="fw-bold text-danger" id="deleteVoucherNumber"></p>
+                    <p class="text-muted small">This action cannot be undone.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Yes, Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const getCsrfToken = () => csrf;
 
     // FILTER & SEARCH
     document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -223,7 +254,6 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .then(r => r.json())
             .then(data => {
-                // Update button
                 this.textContent = isApprove ? 'Approved' : 'Rejected';
                 this.className = isApprove ? 'btn btn-success btn-sm' : 'btn btn-danger btn-sm';
                 this.disabled = true;
@@ -231,7 +261,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 const other = row.querySelector(`.approve-btn[data-status="${isApprove ? 'REJECTED' : 'APPROVED'}"]`);
                 if (other) other.style.display = 'none';
 
-                // Update status badge
                 const badge = row.querySelector('.status-cell .badge');
                 if (data.status === 'APPROVED') {
                     badge.outerHTML = '<span class="badge bg-success">Approved</span>';
@@ -244,11 +273,10 @@ document.addEventListener('DOMContentLoaded', function () {
                     row.dataset.status = 'PENDING';
                 }
 
-                // === UPDATE MODAL CONTENT ===
+                // UPDATE MODAL
                 const modalId = `approvalModal${id}`;
                 const modal = document.getElementById(modalId);
                 if (modal) {
-                    // Update Approved List
                     const approvedList = modal.querySelector(`#approved-list-${id}`);
                     approvedList.innerHTML = '';
                     data.approvals.filter(a => a.status === 'APPROVED').forEach(a => {
@@ -261,7 +289,6 @@ document.addEventListener('DOMContentLoaded', function () {
                         approvedList.innerHTML = '<li class="list-group-item text-muted">None</li>';
                     }
 
-                    // Update Rejected List
                     const rejectedList = modal.querySelector(`#rejected-list-${id}`);
                     rejectedList.innerHTML = '';
                     data.approvals.filter(a => a.status === 'REJECTED').forEach(a => {
@@ -274,7 +301,6 @@ document.addEventListener('DOMContentLoaded', function () {
                         rejectedList.innerHTML = '<li class="list-group-item text-muted">None</li>';
                     }
 
-                    // Update Pending List
                     const pendingList = modal.querySelector(`#pending-list-${id}`);
                     pendingList.innerHTML = '';
                     const approvedUsernames = data.approvals.filter(a => a.status === 'APPROVED').map(a => a.approver);
@@ -290,7 +316,6 @@ document.addEventListener('DOMContentLoaded', function () {
                         pendingList.innerHTML = '<li class="list-group-item text-muted">No one required</li>';
                     }
 
-                    // Update Pending Count
                     const pendingCount = modal.querySelector(`#pending-count-${id}`);
                     pendingCount.textContent = data.required_approvers.length - data.approved_count;
                 }
@@ -303,6 +328,39 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
             });
         });
+    });
+
+    // === DELETE VOUCHER ===
+    let voucherToDelete = null;
+
+    document.querySelectorAll('.delete-voucher-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            voucherToDelete = this.dataset.id;
+            document.getElementById('deleteVoucherNumber').textContent = this.dataset.number;
+            new bootstrap.Modal(document.getElementById('deleteVoucherModal')).show();
+        });
+    });
+
+    document.getElementById('confirmDeleteBtn').addEventListener('click', function () {
+        if (!voucherToDelete) return;
+
+        fetch(`/api/vouchers/${voucherToDelete}/delete/`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': getCsrfToken(),
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(r => {
+            if (r.ok) {
+                document.querySelector(`.voucher-row[data-voucher-id="${voucherToDelete}"]`).remove();
+                bootstrap.Modal.getInstance(document.getElementById('deleteVoucherModal')).hide();
+                alert('Voucher deleted successfully.');
+            } else {
+                r.json().then(d => alert('Error: ' + (d.error || 'Failed to delete')));
+            }
+        })
+        .catch(() => alert('Network error.'));
     });
 });
 </script>
