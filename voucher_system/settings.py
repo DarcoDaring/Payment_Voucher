@@ -161,3 +161,13 @@ LOGGING = {
 
 LOGIN_REDIRECT_URL = 'home'        # ← AFTER SUCCESSFUL LOGIN → /
 LOGOUT_REDIRECT_URL = 'home'       # ← Optional: after logout
+
+# SECURITY – REQUIRED FOR RAILWAY (HTTPS)
+CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_SECURE = True
+SECURE_SSL_REDIRECT = True  # Redirect HTTP → HTTPS (Railway handles it safely)
+
+# Optional: Prevent clickjacking
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
