@@ -26,7 +26,7 @@
         </div>
     </div>
 
-    <!-- TABLE – NO ATTACHMENTS COLUMN -->
+    <!-- TABLE -->
     <div class="table-responsive">
         <table class="table table-striped table-hover align-middle" id="voucherTable">
             <thead class="table-primary">
@@ -109,7 +109,7 @@
         </table>
     </div>
 
-    <!-- APPROVAL MODALS (unchanged) -->
+    <!-- APPROVAL MODALS -->
     {% for voucher in vouchers %}
     <div class="modal fade" id="approvalModal{{ voucher.id }}" tabindex="-1">
         <div class="modal-dialog modal-lg">
@@ -122,7 +122,7 @@
                     <div class="row">
                         <div class="col-md-4">
                             <h6 class="text-success">Approved ({{ voucher.approved_count|default:0 }})</h6>
-                            <ul class="list-group">
+                            <ul class="list-group" id="approved-list-{{ voucher.id }}">
                                 {% for approval in voucher.approvals.all %}
                                     {% if approval.status == 'APPROVED' %}
                                         <li class="list-group-item d-flex justify-content-between">
@@ -137,7 +137,7 @@
                         </div>
                         <div class="col-md-4">
                             <h6 class="text-danger">Rejected ({{ voucher.rejected_count|default:0 }})</h6>
-                            <ul class="list-group">
+                            <ul class="list-group" id="rejected-list-{{ voucher.id }}">
                                 {% for approval in voucher.approvals.all %}
                                     {% if approval.status == 'REJECTED' %}
                                         <li class="list-group-item d-flex justify-content-between">
@@ -152,9 +152,9 @@
                         </div>
                         <div class="col-md-4">
                             <h6 class="text-secondary">
-                                Pending ({{ voucher.required_approvers|length|sub:voucher.approved_count|default:0 }})
+                                Pending (<span id="pending-count-{{ voucher.id }}">{{ voucher.required_approvers|length|sub:voucher.approved_count|default:0 }}</span>)
                             </h6>
-                            <ul class="list-group">
+                            <ul class="list-group" id="pending-list-{{ voucher.id }}">
                                 {% for item in voucher.pending_approvers %}
                                     {% if not item.has_approved %}
                                         <li class="list-group-item">{{ item.name }}</li>
@@ -223,6 +223,7 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .then(r => r.json())
             .then(data => {
+                // Update button
                 this.textContent = isApprove ? 'Approved' : 'Rejected';
                 this.className = isApprove ? 'btn btn-success btn-sm' : 'btn btn-danger btn-sm';
                 this.disabled = true;
@@ -230,13 +231,69 @@ document.addEventListener('DOMContentLoaded', function () {
                 const other = row.querySelector(`.approve-btn[data-status="${isApprove ? 'REJECTED' : 'APPROVED'}"]`);
                 if (other) other.style.display = 'none';
 
+                // Update status badge
                 const badge = row.querySelector('.status-cell .badge');
-                if (data.status === 'APPROVED')
+                if (data.status === 'APPROVED') {
                     badge.outerHTML = '<span class="badge bg-success">Approved</span>';
-                else if (data.status === 'REJECTED')
+                    row.dataset.status = 'APPROVED';
+                } else if (data.status === 'REJECTED') {
                     badge.outerHTML = '<span class="badge bg-danger">Rejected</span>';
-                else
+                    row.dataset.status = 'REJECTED';
+                } else {
                     badge.outerHTML = `<span class="badge bg-warning text-dark">Pending (${data.approved_count}/${data.required_approvers.length})</span>`;
+                    row.dataset.status = 'PENDING';
+                }
+
+                // === UPDATE MODAL CONTENT ===
+                const modalId = `approvalModal${id}`;
+                const modal = document.getElementById(modalId);
+                if (modal) {
+                    // Update Approved List
+                    const approvedList = modal.querySelector(`#approved-list-${id}`);
+                    approvedList.innerHTML = '';
+                    data.approvals.filter(a => a.status === 'APPROVED').forEach(a => {
+                        const li = document.createElement('li');
+                        li.className = 'list-group-item d-flex justify-content-between';
+                        li.innerHTML = `<span>${a.approver}</span><small class="text-muted">${a.approved_at}</small>`;
+                        approvedList.appendChild(li);
+                    });
+                    if (approvedList.children.length === 0) {
+                        approvedList.innerHTML = '<li class="list-group-item text-muted">None</li>';
+                    }
+
+                    // Update Rejected List
+                    const rejectedList = modal.querySelector(`#rejected-list-${id}`);
+                    rejectedList.innerHTML = '';
+                    data.approvals.filter(a => a.status === 'REJECTED').forEach(a => {
+                        const li = document.createElement('li');
+                        li.className = 'list-group-item d-flex justify-content-between';
+                        li.innerHTML = `<span>${a.approver}</span><small class="text-muted">${a.approved_at}</small>`;
+                        rejectedList.appendChild(li);
+                    });
+                    if (rejectedList.children.length === 0) {
+                        rejectedList.innerHTML = '<li class="list-group-item text-muted">None</li>';
+                    }
+
+                    // Update Pending List
+                    const pendingList = modal.querySelector(`#pending-list-${id}`);
+                    pendingList.innerHTML = '';
+                    const approvedUsernames = data.approvals.filter(a => a.status === 'APPROVED').map(a => a.approver);
+                    data.required_approvers.forEach(name => {
+                        if (!approvedUsernames.includes(name)) {
+                            const li = document.createElement('li');
+                            li.className = 'list-group-item';
+                            li.textContent = name;
+                            pendingList.appendChild(li);
+                        }
+                    });
+                    if (pendingList.children.length === 0) {
+                        pendingList.innerHTML = '<li class="list-group-item text-muted">No one required</li>';
+                    }
+
+                    // Update Pending Count
+                    const pendingCount = modal.querySelector(`#pending-count-${id}`);
+                    pendingCount.textContent = data.required_approvers.length - data.approved_count;
+                }
             })
             .catch(() => {
                 alert('Approval failed.');

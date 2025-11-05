@@ -1,6 +1,6 @@
 # vouchers/views.py
 from django.shortcuts import render, get_object_or_404, redirect
-from django.views.generic import TemplateView, ListView, DetailView, CreateView
+from django.views.generic import TemplateView, ListView, DetailView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth import login
 from django.contrib import messages
@@ -13,6 +13,7 @@ from rest_framework.permissions import IsAuthenticated
 from .models import Voucher, Particular, VoucherApproval, Designation, ActiveApprovalDesignation, UserProfile
 from .serializers import VoucherSerializer, VoucherApprovalSerializer
 from django.contrib.auth.models import User, Group
+from django.contrib.auth.hashers import make_password
 from django.db import transaction
 from decimal import Decimal, InvalidOperation
 
@@ -162,8 +163,8 @@ class VoucherCreateAPI(AccountantRequiredMixin, APIView):
                 except InvalidOperation:
                     return Response(
                         {'particulars': f'Invalid amount for item {i+1}'},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
 
                 particulars.append({
                     'description': desc,
@@ -237,41 +238,7 @@ class VoucherApprovalAPI(AdminStaffRequiredMixin, APIView):
         return Response(response_data)
 
 
-class CreateUserView(LoginRequiredMixin, CreateView):
-    model = User
-    template_name = 'vouchers/create_user.html'
-    fields = ['username', 'password']
-    success_url = '/'
-
-    def dispatch(self, request, *args, **kwargs):
-        if not request.user.is_superuser:
-            messages.error(request, "Only superusers can create users.")
-            return redirect('home')
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['groups'] = ['Accountants', 'Admin Staff']
-        context['designations'] = Designation.objects.all()
-        return context
-
-    def form_valid(self, form):
-        response = super().form_valid(form)
-        user = self.object
-        user.set_password(form.cleaned_data['password'])
-        user.save()
-
-        group_name = self.request.POST.get('user_group')
-        if group_name in ['Accountants', 'Admin Staff']:
-            group = Group.objects.get(name=group_name)
-            user.groups.add(group)
-
-        designation_id = self.request.POST.get('designation')
-        if group_name == 'Admin Staff' and designation_id:
-            UserProfile.objects.create(user=user, designation_id=designation_id)
-
-        messages.success(self.request, f"User '{user.username}' created successfully.")
-        return response
+# === REMOVED: CreateUserView (replaced by modal + UserCreateAPI) ===
 
 
 class DesignationCreateAPI(APIView):
@@ -279,7 +246,7 @@ class DesignationCreateAPI(APIView):
 
     def post(self, request):
         if not request.user.is_superuser:
-            return Response({'error': 'Superuser only'}, status=403)
+            return Response({'error': 'Superuser Computation'}, status=403)
 
         name = request.data.get('name', '').strip()
         if not name:
@@ -329,3 +296,57 @@ class ApprovalControlAPI(APIView):
             'message': f'Approval workflow updated. {len(active_ids)} active designations.',
             'active_count': len(active_ids)
         })
+
+
+# === NEW: USER CREATE VIA MODAL (AJAX) ===
+class UserCreateAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not request.user.is_superuser:
+            return Response({'error': 'Superuser only'}, status=403)
+
+        username = request.data.get('username', '').strip()
+        password = request.data.get('password', '')
+        user_group = request.data.get('user_group', '')
+        designation_id = request.data.get('designation')
+
+        # Validation
+        if not username or not password or not user_group:
+            return Response({'error': 'Username, password, and group are required'}, status=400)
+        if User.objects.filter(username=username).exists():
+            return Response({'error': 'Username already exists'}, status=400)
+        if user_group not in ['Accountants', 'Admin Staff']:
+            return Response({'error': 'Invalid group'}, status=400)
+        if user_group == 'Admin Staff' and not designation_id:
+            return Response({'error': 'Designation is required for Admin Staff'}, status=400)
+        if len(password) < 8:
+            return Response({'error': 'Password must be at least 8 characters'}, status=400)
+
+        try:
+            # Create user
+            user = User.objects.create(
+                username=username,
+                password=make_password(password)
+            )
+
+            # Assign group
+            group = Group.objects.get(name=user_group)
+            user.groups.add(group)
+
+            # Assign designation if Admin Staff
+            if user_group == 'Admin Staff':
+                designation = Designation.objects.get(id=designation_id)
+                UserProfile.objects.create(user=user, designation=designation)
+
+            return Response({
+                'message': f'User "{username}" created successfully.',
+                'id': user.id
+            }, status=201)
+
+        except Group.DoesNotExist:
+            return Response({'error': 'Group does not exist'}, status=400)
+        except Designation.DoesNotExist:
+            return Response({'error': 'Invalid designation'}, status=400)
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)

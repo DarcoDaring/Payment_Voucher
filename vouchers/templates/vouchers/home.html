@@ -2,11 +2,21 @@
 {% load static %}
 
 {% block content %}
+
+<!-- IF USER IS NOT LOGGED IN → SHOW ONLY CENTERED LOGIN BUTTON -->
+{% if not user.is_authenticated %}
+<div class="d-flex justify-content-center align-items-center min-vh-100">
+    <a href="{% url 'login' %}" class="btn btn-primary btn-lg px-5 py-3 shadow-lg">
+        <i class="bi bi-box-arrow-in-right"></i> Login
+    </a>
+</div>
+{% else %}
+
+<!-- ORIGINAL CONTENT (ONLY FOR LOGGED-IN USERS) -->
 <div class="container mt-5">
     <div class="text-center">
 
         <!-- FOR ALL AUTHENTICATED USERS -->
-        {% if user.is_authenticated %}
         <div class="mb-4 d-flex justify-content-center gap-3 flex-wrap">
             <a href="{% url 'voucher_list' %}" class="btn btn-primary btn-lg px-5 shadow-sm">
                 View Vouchers
@@ -21,14 +31,15 @@
             </button>
             {% endif %}
         </div>
-        {% endif %}
 
         <!-- SUPERUSER ONLY -->
         {% if user.is_superuser %}
         <div class="d-flex justify-content-center gap-3 flex-wrap mt-4">
-            <a href="{% url 'create_user' %}" class="btn btn-warning btn-lg px-5 shadow-sm text-decoration-none">
+            <button class="btn btn-warning btn-lg px-5 shadow-sm" 
+                    data-bs-toggle="modal" 
+                    data-bs-target="#createUserModal">
                 Create User
-            </a>
+            </button>
             <button class="btn btn-warning btn-lg px-5 shadow-sm" 
                     data-bs-toggle="modal" 
                     data-bs-target="#createDesignationModal">
@@ -43,4 +54,6 @@
         {% endif %}
     </div>
 </div>
+
+{% endif %}
 {% endblock %}

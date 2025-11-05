@@ -13,6 +13,10 @@
             <p><strong>Payment Type:</strong> {{ voucher.get_payment_type_display }}</p>
             <p><strong>Pay To:</strong> {{ voucher.name_title }} {{ voucher.pay_to }}</p>
 
+            {% if voucher.cheque_number %}
+            <p><strong>Cheque Number:</strong> {{ voucher.cheque_number }}</p>
+            {% endif %}
+
             <p><strong>Status:</strong>
                 <a href="#" class="status-link" data-bs-toggle="modal" data-bs-target="#approvalModal">
                     <span id="status-badge">
@@ -118,6 +122,13 @@
                         {% endif %}
                     {% endif %}
                 {% endif %}
+
+                <!-- PRINT BUTTON: ONLY WHEN APPROVED -->
+                {% if voucher.status == 'APPROVED' %}
+                <button onclick="window.print()" class="btn btn-info">
+                    <i class="bi bi-printer"></i> Print Voucher
+                </button>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -186,6 +197,104 @@
     </div>
 </div>
 
+<!-- PRINTABLE VOUCHER SECTION (HIDDEN ON SCREEN) -->
+<div id="print-section" style="display: none;">
+    <div style="padding: 40px; font-family: Arial, sans-serif; max-width: 800px; margin: auto;">
+        <!-- Header -->
+        <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 10px;">
+            <h2>VOUCHER</h2>
+            <p style="margin: 5px 0; font-size: 14px;"><strong>Your Company Name</strong></p>
+            <p style="margin: 5px 0; font-size: 12px;">Address Line 1, City, Country</p>
+            <p style="margin: 5px 0; font-size: 12px;">Phone: +123-456-7890 | Email: finance@company.com</p>
+        </div>
+
+        <!-- Voucher Info -->
+        <table style="width: 100%; margin-bottom: 20px; font-size: 14px;">
+            <tr>
+                <td style="width: 50%;"><strong>Voucher No:</strong> {{ voucher.voucher_number }}</td>
+                <td style="text-align: right;"><strong>Date:</strong> {{ voucher.voucher_date }}</td>
+            </tr>
+            <tr>
+                <td><strong>Pay To:</strong> {{ voucher.name_title }} {{ voucher.pay_to }}</td>
+                <td style="text-align: right;">
+                    <strong>Payment Type:</strong> {{ voucher.get_payment_type_display }}
+                    {% if voucher.cheque_number %}| <strong>Cheque #:</strong> {{ voucher.cheque_number }}{% endif %}
+                </td>
+            </tr>
+        </table>
+
+        <!-- Particulars Table -->
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px;">
+            <thead>
+                <tr style="background-color: #f8f9fa; border-bottom: 2px solid #000;">
+                    <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Description</th>
+                    <th style="padding: 10px; text-align: right; border: 1px solid #ddd; width: 120px;">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in voucher.particulars.all %}
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 8px; border: 1px solid #ddd;">{{ p.description }}</td>
+                    <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">{{ p.amount|floatformat:2 }}</td>
+                </tr>
+                {% endfor %}
+                <tr style="background-color: #e9ecef; font-weight: bold;">
+                    <td style="padding: 10px; text-align: right; border: 1px solid #ddd;">Total:</td>
+                    <td style="padding: 10px; text-align: right; border: 1px solid #ddd;">
+                        {{ voucher.particulars.all|sum_particulars|floatformat:2 }}
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Approval Signatures -->
+        <div style="margin-top: 40px; display: flex; justify-content: space-between; font-size: 13px;">
+            <div style="text-align: center; width: 45%;">
+                <p style="border-top: 1px solid #000; padding-top: 5px; margin: 40px 0 5px;">
+                    Prepared By: {{ voucher.created_by.username }}
+                </p>
+            </div>
+            <div style="text-align: center; width: 45%;">
+                <p style="border-top: 1px solid #000; padding-top: 5px; margin: 40px 0 5px;">
+                    Approved By:
+                    {% for approval in voucher.approvals.all %}
+                        {% if approval.status == 'APPROVED' %}
+                            {{ approval.approver.username }}{% if not forloop.last %}, {% endif %}
+                        {% endif %}
+                    {% endfor %}
+                </p>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="text-align: center; margin-top: 50px; font-size: 11px; color: #666;">
+            <p>Printed on: {{ "now"|date:"d M Y H:i" }} | This is a system-generated voucher.</p>
+        </div>
+    </div>
+</div>
+
+<!-- PRINT STYLES -->
+<style>
+@media print {
+    body * {
+        visibility: hidden;
+    }
+    #print-section, #print-section * {
+        visibility: visible;
+    }
+    #print-section {
+        display: block !important;
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+    }
+    .no-print {
+        display: none !important;
+    }
+}
+</style>
+
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
@@ -233,6 +342,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 bar.style.width = `${percent}%`;
                 bar.textContent = `${approved} / ${total}`;
                 document.getElementById('required-list').textContent = `Required: ${data.required_approvers.join(', ')}`;
+
+                // Reload page after approval to show Print button if now APPROVED
+                if (data.status === 'APPROVED') {
+                    setTimeout(() => location.reload(), 800);
+                }
             })
             .catch(() => {
                 alert('Approval failed.');
