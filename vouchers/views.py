@@ -14,8 +14,10 @@ from .models import Voucher, Particular, VoucherApproval, Designation, ActiveApp
 from .serializers import VoucherSerializer, VoucherApprovalSerializer
 from django.contrib.auth.models import User, Group
 from django.contrib.auth.hashers import make_password
-from django.db import transaction
+from django.db import transaction, OperationalError
+from django.db.models import F
 from decimal import Decimal, InvalidOperation
+import time
 
 
 # === MIXINS ===
@@ -45,6 +47,13 @@ class HomeView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        user = self.request.user
+
+        # Safe group checks for templates
+        context['is_accountant'] = user.is_authenticated and user.groups.filter(name='Accountants').exists()
+        context['is_admin_staff'] = user.is_authenticated and (user.groups.filter(name='Admin Staff').exists() or user.is_superuser)
+        context['is_superuser'] = user.is_superuser
+
         context['designations'] = Designation.objects.all()
         return context
 
@@ -62,12 +71,9 @@ class VoucherListView(LoginRequiredMixin, ListView):
             'approvals',
             'approvals__approver',
         )
-        # === CHANGE: Superuser sees ALL vouchers, Accountants see only theirs ===
         if not self.request.user.is_superuser:
             if self.request.user.groups.filter(name='Accountants').exists():
                 qs = qs.filter(created_by=self.request.user)
-        # === END CHANGE ===
-
         return qs.annotate(
             approved_count=Count(
                 Case(When(approvals__status='APPROVED', then=1)),
@@ -81,10 +87,16 @@ class VoucherListView(LoginRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        user = self.request.user
+
+        # Safe group checks
+        context['is_accountant'] = user.is_authenticated and user.groups.filter(name='Accountants').exists()
+        context['is_admin_staff'] = user.is_authenticated and (user.groups.filter(name='Admin Staff').exists() or user.is_superuser)
+
         context['designations'] = Designation.objects.all()
         for voucher in context['vouchers']:
             try:
-                voucher.user_approval = voucher.approvals.get(approver=self.request.user)
+                voucher.user_approval = voucher.approvals.get(approver=user)
             except VoucherApproval.DoesNotExist:
                 voucher.user_approval = None
 
@@ -103,14 +115,12 @@ class VoucherDetailView(LoginRequiredMixin, DetailView):
     context_object_name = 'voucher'
 
     def get_queryset(self):
-        # === CHANGE: Superuser can view any voucher, Accountants only their own ===
         qs = super().get_queryset().select_related('created_by').prefetch_related(
             'particulars', 'approvals__approver'
         )
         if not self.request.user.is_superuser:
             if self.request.user.groups.filter(name='Accountants').exists():
                 qs = qs.filter(created_by=self.request.user)
-        # === END CHANGE ===
         return qs.annotate(
             approved_count=Count(
                 Case(When(approvals__status='APPROVED', then=1)),
@@ -124,10 +134,16 @@ class VoucherDetailView(LoginRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['designations'] = Designation.objects.all()
+        user = self.request.user
         voucher = context['voucher']
+
+        # Safe group checks
+        context['is_accountant'] = user.is_authenticated and user.groups.filter(name='Accountants').exists()
+        context['is_admin_staff'] = user.is_authenticated and (user.groups.filter(name='Admin Staff').exists() or user.is_superuser)
+
+        context['designations'] = Designation.objects.all()
         try:
-            context['user_approval'] = voucher.approvals.get(approver=self.request.user)
+            context['user_approval'] = voucher.approvals.get(approver=user)
         except VoucherApproval.DoesNotExist:
             context['user_approval'] = None
 
@@ -152,7 +168,6 @@ class VoucherCreateAPI(AccountantRequiredMixin, APIView):
         data = request.POST.copy()
         files = request.FILES
 
-        # ---------- Re-build particulars ----------
         particulars = []
         i = 0
         while f'particulars[{i}][description]' in data:
@@ -173,7 +188,7 @@ class VoucherCreateAPI(AccountantRequiredMixin, APIView):
                     return Response(
                         {'particulars': f'Invalid amount for item {i+1}'},
                         status=status.HTTP_400_BAD_REQUEST
-                        )
+                    )
 
                 particulars.append({
                     'description': desc,
@@ -188,17 +203,14 @@ class VoucherCreateAPI(AccountantRequiredMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # ---------- Main attachment ----------
         if 'attachment' not in files:
             return Response(
                 {'attachment': 'Main attachment is required.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # ---------- Cheque number ----------
         cheque_number = data.get('cheque_number', '').strip() if data.get('payment_type') == 'CHEQUE' else None
 
-        # ---------- Serializer data ----------
         serializer_data = {
             'voucher_date': data.get('voucher_date'),
             'payment_type': data.get('payment_type'),
@@ -217,37 +229,65 @@ class VoucherCreateAPI(AccountantRequiredMixin, APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+# FINAL FIXED: VoucherApprovalAPI
 class VoucherApprovalAPI(AdminStaffRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
-        voucher = get_object_or_404(Voucher, pk=pk)
         status_choice = request.data.get('status')
 
         if status_choice not in ['APPROVED', 'REJECTED']:
             return Response({'status': ['Invalid choice.']}, status=400)
 
-        if request.user.username not in voucher.required_approvers:
-            return Response({'error': 'You are not authorized to approve this voucher.'}, status=403)
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                with transaction.atomic():
+                    # Lock the voucher row immediately
+                    voucher = Voucher.objects.select_for_update(nowait=True).get(pk=pk)
 
-        with transaction.atomic():
-            approval, created = VoucherApproval.objects.update_or_create(
-                voucher=voucher,
-                approver=request.user,
-                defaults={'status': status_choice}
-            )
-            voucher._update_status_if_all_approved()
+                    if request.user.username not in voucher.required_approvers:
+                        return Response(
+                            {'error': 'You are not authorized to approve this voucher.'},
+                            status=403
+                        )
 
-        serializer = VoucherSerializer(voucher, context={'request': request})
-        response_data = serializer.data
-        response_data['approval'] = {
-            'approver': request.user.username,
-            'approved_at': approval.approved_at.strftime('%d %b %H:%M')
-        }
-        return Response(response_data)
+                    approval, created = VoucherApproval.objects.update_or_create(
+                        voucher=voucher,
+                        approver=request.user,
+                        defaults={'status': status_choice}
+                    )
 
+                    # Refresh and update status
+                    voucher.refresh_from_db()
+                    voucher._update_status_if_all_approved()
 
-# === REMOVED: CreateUserView (replaced by modal + UserCreateAPI) ===
+                # Success: serialize fresh data
+                serializer = VoucherSerializer(voucher, context={'request': request})
+                response_data = serializer.data
+                response_data['approval'] = {
+                    'approver': request.user.username,
+                    'approved_at': approval.approved_at.strftime('%d %b %H:%M')
+                }
+                return Response(response_data)
+
+            except OperationalError as e:
+                if 'database is locked' in str(e).lower() and attempt < max_retries - 1:
+                    time.sleep(0.1 * (2 ** attempt))  # Exponential backoff
+                    continue
+                else:
+                    return Response(
+                        {'error': 'Database is busy. Please try again in a moment.'},
+                        status=503
+                    )
+            except Voucher.DoesNotExist:
+                return Response({'error': 'Voucher not found.'}, status=404)
+
+        # If all retries fail
+        return Response(
+            {'error': 'Failed to process approval due to database lock.'},
+            status=503
+        )
 
 
 class DesignationCreateAPI(APIView):
@@ -255,7 +295,7 @@ class DesignationCreateAPI(APIView):
 
     def post(self, request):
         if not request.user.is_superuser:
-            return Response({'error': 'Superuser Computation'}, status=403)
+            return Response({'error': 'Superuser only'}, status=403)
 
         name = request.data.get('name', '').strip()
         if not name:
@@ -307,7 +347,6 @@ class ApprovalControlAPI(APIView):
         })
 
 
-# === NEW: USER CREATE VIA MODAL (AJAX) ===
 class UserCreateAPI(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -320,7 +359,6 @@ class UserCreateAPI(APIView):
         user_group = request.data.get('user_group', '')
         designation_id = request.data.get('designation')
 
-        # Validation
         if not username or not password or not user_group:
             return Response({'error': 'Username, password, and group are required'}, status=400)
         if User.objects.filter(username=username).exists():
@@ -333,17 +371,12 @@ class UserCreateAPI(APIView):
             return Response({'error': 'Password must be at least 8 characters'}, status=400)
 
         try:
-            # Create user
             user = User.objects.create(
                 username=username,
                 password=make_password(password)
             )
-
-            # Assign group
             group = Group.objects.get(name=user_group)
             user.groups.add(group)
-
-            # Assign designation if Admin Staff
             if user_group == 'Admin Staff':
                 designation = Designation.objects.get(id=designation_id)
                 UserProfile.objects.create(user=user, designation=designation)

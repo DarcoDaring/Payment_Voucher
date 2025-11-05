@@ -9,7 +9,7 @@
     <!-- ACTION BAR -->
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <div class="btn-group" role="group">
-            {% if user.groups.all.0.name == 'Accountants' %}
+            {% if is_accountant %}
             <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createVoucherModal">
                 Create Voucher
             </button>
@@ -86,7 +86,7 @@
                         <a href="{% url 'voucher_detail' voucher.id %}"
                            class="btn btn-info btn-sm">View</a>
 
-                        {% if user.groups.all.0.name == 'Admin Staff' and voucher.status == 'PENDING' %}
+                        {% if is_admin_staff and voucher.status == 'PENDING' %}
                             {% if voucher.user_approval %}
                                 {% if voucher.user_approval.status == 'APPROVED' %}
                                     <span class="badge bg-success">Approved</span>
@@ -106,7 +106,7 @@
                         <button class="btn btn-danger btn-sm delete-voucher-btn"
                                 data-id="{{ voucher.id }}"
                                 data-number="{{ voucher.voucher_number }}">
-                            <i class="bi bi-trash"></i> Delete
+                            Delete
                         </button>
                         {% endif %}
                     </td>

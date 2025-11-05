@@ -106,7 +106,7 @@
             <div class="d-flex gap-2">
                 <a href="{% url 'voucher_list' %}" class="btn btn-secondary">Back to List</a>
 
-                {% if user.groups.all.0.name == 'Admin Staff' and voucher.status == 'PENDING' %}
+                {% if is_admin_staff and voucher.status == 'PENDING' %}
                     {% if not user_approval %}
                         <button class="btn btn-success approve-btn" data-id="{{ voucher.id }}" data-status="APPROVED">
                             Approve
@@ -126,7 +126,7 @@
                 <!-- PRINT BUTTON: ONLY WHEN APPROVED -->
                 {% if voucher.status == 'APPROVED' %}
                 <button onclick="window.print()" class="btn btn-info">
-                    <i class="bi bi-printer"></i> Print Voucher
+                    Print Voucher
                 </button>
                 {% endif %}
             </div>
@@ -197,7 +197,7 @@
     </div>
 </div>
 
-<!-- PRINTABLE VOUCHER SECTION (HIDDEN ON SCREEN) -->
+<!-- PRINTABLE SECTION -->
 <div id="print-section" style="display: none;">
     <div style="padding: 40px; font-family: Arial, sans-serif; max-width: 800px; margin: auto;">
         <!-- Header -->
@@ -273,25 +273,11 @@
     </div>
 </div>
 
-<!-- PRINT STYLES -->
 <style>
 @media print {
-    body * {
-        visibility: hidden;
-    }
-    #print-section, #print-section * {
-        visibility: visible;
-    }
-    #print-section {
-        display: block !important;
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100%;
-    }
-    .no-print {
-        display: none !important;
-    }
+    body * { visibility: hidden; }
+    #print-section, #print-section * { visibility: visible; }
+    #print-section { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
 }
 </style>
 
@@ -343,7 +329,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 bar.textContent = `${approved} / ${total}`;
                 document.getElementById('required-list').textContent = `Required: ${data.required_approvers.join(', ')}`;
 
-                // Reload page after approval to show Print button if now APPROVED
                 if (data.status === 'APPROVED') {
                     setTimeout(() => location.reload(), 800);
                 }

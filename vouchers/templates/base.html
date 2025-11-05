@@ -33,6 +33,11 @@
         #particularsTable th, #particularsTable td {
             vertical-align: middle;
         }
+
+        /* Navbar user dropdown */
+        .navbar .dropdown-toggle::after {
+            display: none;
+        }
     </style>
 
     <!-- CSRF TOKEN IN JS (GLOBAL & SAFE) -->
@@ -45,21 +50,61 @@
     <!-- NAVBAR -->
     <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm">
         <div class="container-fluid">
-            <a class="navbar-brand fw-bold" href="{% url 'home' %}">Voucher System</a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="{% url 'voucher_list' %}">Vouchers</a>
+            <a class="navbar-brand fw-bold" href="{% url 'home' %}">
+                <i class="bi bi-file-earmark-text"></i> Voucher System
+            </a>
 
-                {% if user.is_authenticated %}
-                    {% if user.groups.all.0.name == 'Admin Staff' or user.is_superuser %}
-                        <a class="nav-link" href="{% url 'admin:index' %}">Admin</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarContent">
+                <!-- LEFT: Vouchers -->
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'voucher_list' %}">
+                            <i class="bi bi-list-ul"></i> Vouchers
+                        </a>
+                    </li>
+                </ul>
+
+                <!-- RIGHT: USER MENU -->
+                <ul class="navbar-nav ms-auto align-items-center">
+                    {% if user.is_authenticated %}
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle text-primary fw-bold d-flex align-items-center gap-2" 
+                               href="#" role="button" data-bs-toggle="dropdown" style="text-decoration: none;">
+                                <i class="bi bi-person-circle fs-5"></i>
+                                <span>{{ user.username }}</span>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end shadow">
+                                <!-- ONLY SUPERUSER SEES ADMIN PANEL -->
+                                {% if user.is_superuser %}
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'admin:index' %}">
+                                        <i class="bi bi-gear"></i> Admin Panel
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                {% endif %}
+                                <li>
+                                    <a class="dropdown-item text-danger" 
+                                       data-bs-toggle="modal" 
+                                       data-bs-target="#logoutModal" 
+                                       style="cursor: pointer;">
+                                        <i class="bi bi-box-arrow-right"></i> Logout
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+                    {% else %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'login' %}">
+                                <i class="bi bi-box-arrow-in-right"></i> Login
+                            </a>
+                        </li>
                     {% endif %}
-
-                    <a class="nav-link" data-bs-toggle="modal" data-bs-target="#logoutModal" style="cursor:pointer;">
-                        Logout
-                    </a>
-                {% else %}
-                    <a class="nav-link" href="{% url 'login' %}">Login</a>
-                {% endif %}
+                </ul>
             </div>
         </div>
     </nav>
