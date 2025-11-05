@@ -155,3 +155,21 @@ LOGGING = {
 LOGIN_REDIRECT_URL = 'home'        # ← AFTER SUCCESSFUL LOGIN → /
 LOGOUT_REDIRECT_URL = 'home'       # ← Optional: after logout
 
+import os
+import dj_database_url
+
+# Production settings
+DEBUG = 'RAILWAY_ENVIRONMENT' not in os.environ  # False in prod
+ALLOWED_HOSTS = ['*']  # Or your domain
+
+# Database (SQLite local, PostgreSQL on Railway)
+if 'DATABASE_URL' in os.environ:
+    DATABASES['default'] = dj_database_url.parse(os.environ['DATABASE_URL'])
+else:
+    DATABASES['default'] = {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    }
+
+# Static files
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
