@@ -1,0 +1,6 @@
+Django==5.2.7
+djangorestframework
+gunicorn
+dj-database-url
+psycopg2-binary  # For PostgreSQL
+whitenoise  # Static files

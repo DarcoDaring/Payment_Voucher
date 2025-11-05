@@ -154,3 +154,4 @@ LOGGING = {
 
 LOGIN_REDIRECT_URL = 'home'        # ← AFTER SUCCESSFUL LOGIN → /
 LOGOUT_REDIRECT_URL = 'home'       # ← Optional: after logout
+
