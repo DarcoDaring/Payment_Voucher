@@ -105,9 +105,18 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# Media files (uploads
+# Media files (uploads) - UPDATED FOR RAILWAY PERSISTENT VOLUME
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+
+# Use persistent volume on Railway, local folder in dev
+if os.environ.get('RAILWAY_ENVIRONMENT'):
+    MEDIA_ROOT = '/app/media'
+else:
+    MEDIA_ROOT = BASE_DIR / 'media'
+
+# Auto-create media directories on startup
+os.makedirs(MEDIA_ROOT / 'vouchers' / 'attachments', exist_ok=True)
+os.makedirs(MEDIA_ROOT / 'vouchers' / 'particulars', exist_ok=True)
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

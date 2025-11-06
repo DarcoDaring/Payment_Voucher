@@ -65,3 +65,12 @@ Not Found: /media/vouchers/attachments/Screenshot_30_QunAkIZ.png
 "GET /vouchers/ HTTP/1.1" 200 40795
 D:\Internship\PV4\voucher_system\voucher_system\settings.py changed, reloading.
 Watching for file changes with StatReloader
+"GET / HTTP/1.1" 200 27462
+"GET /vouchers/ HTTP/1.1" 200 40795
+"GET /vouchers/35/ HTTP/1.1" 200 38395
+Not Found: /media/vouchers/attachments/Screenshot_30_QunAkIZ.png
+"GET /media/vouchers/attachments/Screenshot_30_QunAkIZ.png HTTP/1.1" 404 179
+D:\Internship\PV4\voucher_system\voucher_system\urls.py changed, reloading.
+Watching for file changes with StatReloader
+D:\Internship\PV4\voucher_system\voucher_system\settings.py changed, reloading.
+Watching for file changes with StatReloader

@@ -8,7 +8,7 @@ from vouchers.views import (
     HomeView, VoucherListView, VoucherDetailView,
     VoucherCreateAPI, VoucherApprovalAPI,
     DesignationCreateAPI, ApprovalControlAPI,
-    UserCreateAPI,VoucherDeleteAPI  # ← NEW: MODAL API
+    UserCreateAPI, VoucherDeleteAPI
 )
 
 urlpatterns = [
@@ -19,21 +19,18 @@ urlpatterns = [
     path('vouchers/', VoucherListView.as_view(), name='voucher_list'),
     path('vouchers/<int:pk>/', VoucherDetailView.as_view(), name='voucher_detail'),
 
-    # === REMOVE THIS LINE (OLD PAGE) ===
-    # path('create-user/', CreateUserView.as_view(), name='create_user'),
-
     # API ENDPOINTS
     path('api/vouchers/create/', VoucherCreateAPI.as_view(), name='voucher_create_api'),
-    path('api/vouchers/<int:pk>/approve/', VoucherApprovalAPI.as_view(), name='voucher_approval_api'),  # ← Fixed: was 'voucher_approve_api'
+    path('api/vouchers/<int:pk>/approve/', VoucherApprovalAPI.as_view(), name='voucher_approval_api'),
     path('api/designations/create/', DesignationCreateAPI.as_view(), name='designation_create_api'),
-    path('api/approval/control/', ApprovalControlAPI.as_view(), name='approval_control_api'),  # ← Fixed: consistent path
-    path('api/users/create/', UserCreateAPI.as_view(), name='user_create_api'),  # ← NEW: MODAL API
+    path('api/approval/control/', ApprovalControlAPI.as_view(), name='approval_control_api'),
+    path('api/users/create/', UserCreateAPI.as_view(), name='user_create_api'),
 
     # AUTH
     path('accounts/login/', auth_views.LoginView.as_view(template_name='login.html'), name='login'),
     path('accounts/', include('django.contrib.auth.urls')),
     path('api/vouchers/<int:pk>/delete/', VoucherDeleteAPI.as_view(), name='voucher_delete_api'),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+]
 
-if not settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# Serve media files in both DEBUG and production (Railway)
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

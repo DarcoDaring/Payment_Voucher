@@ -1,0 +1,11 @@
+{
+  "build": {
+    "builder": "paketobuildpacks/builder:base"
+  },
+  "volumes": [
+    {
+      "mountPath": "/app/media",
+      "volumeName": "voucher-media"
+    }
+  ]
+}
