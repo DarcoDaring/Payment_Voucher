@@ -19,12 +19,28 @@ SECRET_KEY = os.environ.get(
     "django-insecure-eht+#foh3tw)@)a8eeefxc^#jbv0^$3g4+*#l56m1(w9pztl*v"
 )
 
-DEBUG = False  # ALWAYS False on Railway
+DEBUG = os.environ.get("DJANGO_DEBUG", "False") == "True"   # False on Railway
 
-# Smart ALLOWED_HOSTS – supports Railway domains, custom domains, and local dev
+# ----------------------------------------------------------------------
+# Hosts
+# ----------------------------------------------------------------------
 ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",")
 if not ALLOWED_HOSTS or ALLOWED_HOSTS == [""]:
-    ALLOWED_HOSTS = ["*"]  # fallback for local development
+    ALLOWED_HOSTS = ["*"]          # fallback for local dev
+
+# ----------------------------------------------------------------------
+# CSRF & Secure cookies (required for HTTPS on Railway)
+# ----------------------------------------------------------------------
+CSRF_TRUSTED_ORIGINS = [
+    "https://paymentvoucher-production-d63d.up.railway.app",
+    "https://*.up.railway.app",    # covers preview URLs
+]
+
+CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_SECURE = True
+SECURE_SSL_REDIRECT = True         # Railway already terminates TLS, but keep it
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
 
 # ----------------------------------------------------------------------
 # Application definition
@@ -42,7 +58,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",  # Critical for static files
+    "whitenoise.middleware.WhiteNoiseMiddleware",   # static files
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -53,6 +69,9 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = "voucher_system.urls"
 
+# ----------------------------------------------------------------------
+# Templates
+# ----------------------------------------------------------------------
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
@@ -72,7 +91,7 @@ TEMPLATES = [
 WSGI_APPLICATION = "voucher_system.wsgi.application"
 
 # ----------------------------------------------------------------------
-# Database – PostgreSQL on Railway (auto-configured)
+# Database
 # ----------------------------------------------------------------------
 DATABASE_URL = os.environ.get("DATABASE_URL")
 if DATABASE_URL:
@@ -80,7 +99,6 @@ if DATABASE_URL:
         "default": dj_database_url.parse(DATABASE_URL, conn_max_age=600)
     }
 else:
-    # Local development fallback
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
@@ -115,7 +133,7 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 MEDIA_URL = "/media/"
-MEDIA_ROOT = "/app/media"  # Matches Railway volume mount
+MEDIA_ROOT = "/app/media"          # Railway volume mount
 
 # ----------------------------------------------------------------------
 # Logging (minimal, production-safe)
@@ -123,9 +141,7 @@ MEDIA_ROOT = "/app/media"  # Matches Railway volume mount
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "handlers": {
-        "console": {"class": "logging.StreamHandler"},
-    },
+    "handlers": {"console": {"class": "logging.StreamHandler"}},
     "root": {"handlers": ["console"], "level": "INFO"},
 }
 
@@ -139,3 +155,10 @@ LOGOUT_REDIRECT_URL = "home"
 # Default primary key
 # ----------------------------------------------------------------------
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# ----------------------------------------------------------------------
+# Helper – Favicon (optional, but handy)
+# ----------------------------------------------------------------------
+def favicon_url():
+    from django.contrib.staticfiles.storage import staticfiles_storage
+    return staticfiles_storage.url("favicon.ico")
