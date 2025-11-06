@@ -4,3 +4,5 @@ gunicorn
 dj-database-url
 psycopg2-binary  # For PostgreSQL
 whitenoise  # Static files
+whitenoise==6.6.0
+gunicorn==21.2.0

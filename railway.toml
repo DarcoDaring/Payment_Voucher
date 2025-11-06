@@ -1,0 +1,9 @@
+[build]
+builder = "RAILPACK"
+
+[deploy]
+startCommand = "gunicorn voucher_system.wsgi:application --bind 0.0.0.0:$PORT"
+
+[[volumes]]
+mountPath = "/app/media"
+volumeName = "voucher-media"
