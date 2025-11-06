@@ -168,5 +168,3 @@ class ApprovalLevel(models.Model):
     def __str__(self):
         return f"{self.order}. {self.designation.name} ({'Active' if self.is_active else 'Inactive'})"
     
-
-

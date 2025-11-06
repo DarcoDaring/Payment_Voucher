@@ -145,4 +145,3 @@ class VoucherSerializer(serializers.ModelSerializer):
 
         return voucher
     
-
