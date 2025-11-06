@@ -27,19 +27,6 @@ if not ALLOWED_HOSTS or ALLOWED_HOSTS == [""]:
     ALLOWED_HOSTS = ["*"]  # fallback for local development
 
 # ----------------------------------------------------------------------
-# CSRF Trusted Origins (REQUIRED for HTTPS on Railway)
-# ----------------------------------------------------------------------
-CSRF_TRUSTED_ORIGINS = [
-    "https://paymentvoucher-production-d63d.up.railway.app",
-    "https://*.up.railway.app",  # Covers all Railway preview URLs
-]
-
-# Secure cookies for production
-CSRF_COOKIE_SECURE = True
-SESSION_COOKIE_SECURE = True
-SECURE_SSL_REDIRECT = True  # Redirect HTTP → HTTPS (Railway does this automatically)
-
-# ----------------------------------------------------------------------
 # Application definition
 # ----------------------------------------------------------------------
 INSTALLED_APPS = [
