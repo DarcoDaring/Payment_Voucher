@@ -1,0 +1,623 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Voucher Approval System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11/font/bootstrap-icons.css">
+    <style>
+        .btn-warning { min-width: 180px; }
+        .btn-lg { min-height: 50px; }
+        .file-name { font-size: 0.9em; color: #555; }
+
+        /* WIDER CREATE VOUCHER MODAL */
+        #createVoucherModal .modal-dialog {
+            max-width: 90vw !important;
+            width: 1400px;
+            margin: 1.75rem auto;
+        }
+        @media (max-width: 1500px) {
+            #createVoucherModal .modal-dialog { width: 95vw; }
+        }
+        #createVoucherModal .modal-body { max-height: 75vh; overflow-y: auto; }
+
+        #particularsTable th, #particularsTable td { vertical-align: middle; }
+        .navbar .dropdown-toggle::after { display: none; }
+        .grip-handle { cursor: move; color: #6c757d; }
+        .list-group-item:hover .grip-handle { color: #495057; }
+    </style>
+    <script>window.csrfToken = "{{ csrf_token }}";</script>
+</head>
+<body>
+    {% now "Y-m-d" as today %}
+    <script>window.today = "{{ today }}";</script>
+
+    <!-- NAVBAR -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="{% url 'home' %}">Voucher System</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarContent">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item"><a class="nav-link" href="{% url 'voucher_list' %}">Vouchers</a></li>
+                </ul>
+                <ul class="navbar-nav ms-auto align-items-center">
+                    {% if user.is_authenticated %}
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle text-primary fw-bold d-flex align-items-center gap-2" 
+                               href="#" role="button" data-bs-toggle="dropdown">
+                                {{ user.username }}
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end shadow">
+                                {% if user.is_superuser %}
+                                <li><a class="dropdown-item" href="{% url 'admin:index' %}">Admin Panel</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                {% endif %}
+                                <li><a class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#logoutModal">Logout</a></li>
+                            </ul>
+                        </li>
+                    {% else %}
+                        <li class="nav-item"><a class="nav-link" href="{% url 'login' %}">Login</a></li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- FLASH MESSAGES -->
+    {% if messages %}
+        <div class="container mt-3">
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <div class="container mt-4">{% block content %}{% endblock %}</div>
+
+    <!-- LOGOUT MODAL -->
+    {% if user.is_authenticated %}
+    <div class="modal fade" id="logoutModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirm Logout</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body"><p>Are you sure you want to log out?</p></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <form method="post" action="{% url 'logout' %}" class="d-inline">
+                        <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+                        <button type="submit" class="btn btn-danger">Yes, Logout</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- SUCCESS MODAL -->
+    <div class="modal fade" id="successModal" tabindex="-1">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title d-flex align-items-center gap-2">Success</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center py-4">
+                    <p class="mb-0 fs-5" id="successMessage">Voucher created successfully!</p>
+                </div>
+                <div class="modal-footer justify-content-center border-0">
+                    <button type="button" class="btn btn-success px-5" data-bs-dismiss="modal" id="successOkBtn">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CREATE DESIGNATION MODAL -->
+    <div class="modal fade" id="createDesignationModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form id="createDesignationForm">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Create New Designation</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="designation_name" class="form-label">Designation Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="designation_name" name="name" required maxlength="100">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success">Create</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- CREATE USER MODAL (SUPERUSER ONLY) -->
+    {% if user.is_superuser %}
+    <div class="modal fade" id="createUserModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form id="createUserForm">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Create New User</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="user_username" class="form-label">Username <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="user_username" name="username" required maxlength="150">
+                        </div>
+                        <div class="mb-3">
+                            <label for="user_password" class="form-label">Password <span class="text-danger">*</span></label>
+                            <input type="password" class="form-control" id="user_password" name="password" required minlength="8">
+                        </div>
+                        <div class="mb-3">
+                            <label for="user_group" class="form-label">User Group <span class="text-danger">*</span></label>
+                            <select name="user_group" id="user_group" class="form-select" required>
+                                <option value="">-- Select Group --</option>
+                                <option value="Accountants">Accountants</option>
+                                <option value="Admin Staff">Admin Staff</option>
+                            </select>
+                        </div>
+                        <div class="mb-3" id="designation_field_user" style="display:none;">
+                            <label for="user_designation" class="form-label">Designation <span class="text-danger">*</span></label>
+                            <select name="designation" id="user_designation" class="form-select">
+                                <option value="">-- Select Designation --</option>
+                                {% for des in designations %}
+                                    <option value="{{ des.id }}">{{ des.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success">Create User</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- CONTROL APPROVAL MODAL -->
+    {% if user.is_superuser %}
+    <div class="modal fade" id="approvalControlModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Control Approval Workflow</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted">Drag to reorder. Only <strong>active</strong> designations require approval.</p>
+                    <div id="approvalLevelsList" class="list-group"></div>
+                    <div class="mt-3">
+                        <select id="addDesignationSelect" class="form-select">
+                            <option value="">-- Add Designation --</option>
+                        </select>
+                        <button id="addDesignationBtn" class="btn btn-sm btn-outline-primary mt-2">Add</button>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="saveApprovalControl">Save Order</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- CREATE VOUCHER MODAL - NEW COMPACT DESIGN -->
+    {% if user.is_authenticated and user.groups.all.0.name == 'Accountants' %}
+    <div class="modal fade" id="createVoucherModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create New Voucher</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="createVoucherForm" enctype="multipart/form-data">
+
+                        <!-- 1. Voucher Date - Top Right -->
+                        <div class="text-end mb-4">
+                            <div class="d-inline-block" style="width: 180px;">
+                                <label for="voucher_date" class="form-label fw-bold text-primary">
+                                    Voucher Date <span class="text-danger">*</span>
+                                </label>
+                                <input type="date" class="form-control form-control-sm" id="voucher_date" name="voucher_date" max="{{ today }}" required>
+                            </div>
+                        </div>
+
+                                                <!-- 2. Title (SUPER SMALL) + Pay To (Full) -->
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-2">
+                                <label for="name_title" class="form-label">Title <span class="text-danger">*</span></label>
+                                <select class="form-select form-select-sm" id="name_title" name="name_title" required>
+                                    <option value="MR">Mr.</option>
+                                    <option value="MRS">Mrs.</option>
+                                    <option value="MS">Ms.</option>
+                                </select>
+                            </div>
+                            <div class="col-md-10">
+                                <label for="pay_to" class="form-label">Pay To <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="pay_to" name="pay_to" required placeholder="Enter full name">
+                            </div>
+                        </div>  
+
+                        <!-- 3. Payment Type -->
+                        <div class="mb-3" style="max-width: 300px;">
+                            <label for="payment_type" class="form-label">Payment Type <span class="text-danger">*</span></label>
+                            <select class="form-select form-select-sm" id="payment_type" name="payment_type" required>
+                                <option value="CASH">Cash</option>
+                                <option value="CHEQUE">Cheque</option>
+                                <option value="PETTY_CASH">Petty Cash</option>
+                            </select>
+                        </div>
+
+                        <!-- 4. Cheque Number -->
+                        <div class="mb-3" id="chequeNumberField" style="display:none; max-width: 300px;">
+                            <label for="cheque_number" class="form-label">Cheque Number <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-sm" id="cheque_number" name="cheque_number" placeholder="e.g. 123456" maxlength="20">
+                        </div>
+
+                        <!-- 5. Main Attachment -->
+                        <div class="mb-4" style="max-width: 500px;">
+                            <label for="attachment" class="form-label">Main Attachment <span class="text-danger">*</span></label>
+                            <input type="file" class="form-control form-control-sm" id="attachment" name="attachment" required>
+                            <div class="mt-1 text-muted file-name small" id="fileName"></div>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <!-- PARTICULARS -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Particulars <span class="text-danger">*</span></label>
+                            <table class="table table-sm table-bordered" id="particularsTable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th width="40%">Description</th>
+                                        <th width="20%">Amount</th>
+                                        <th width="30%">Attachment</th>
+                                        <th width="10%"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="particularsBody">
+                                    <tr>
+                                        <td><input type="text" class="form-control form-control-sm" name="particulars[0][description]" required></td>
+                                        <td><input type="number" step="0.01" class="form-control form-control-sm" name="particulars[0][amount]" required></td>
+                                        <td><input type="file" class="form-control form-control-sm" name="particulars[0][attachment]"></td>
+                                        <td><button type="button" class="btn btn-sm btn-danger remove-row">Remove</button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <button type="button" class="btn btn-sm btn-primary" id="addParticular">Add Row</button>
+                        </div>
+
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary btn-lg">Submit Voucher</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const getCsrfToken = () => window.csrfToken;
+
+        // Auto-fill date
+        const dateInput = document.getElementById('voucher_date');
+        if (dateInput) {
+            dateInput.value = window.today;
+            dateInput.max = window.today;
+        }
+
+        // === CREATE DESIGNATION ===
+        const createForm = document.getElementById('createDesignationForm');
+        if (createForm) {
+            createForm.addEventListener('submit', function (e) {
+                e.preventDefault();
+                const name = this.querySelector('#designation_name').value.trim();
+                if (!name) return alert('Name required');
+                fetch("{% url 'designation_create_api' %}", {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': getCsrfToken(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                })
+                .then(r => r.json())
+                .then(d => {
+                    if (d.id) {
+                        alert('Designation created!');
+                        bootstrap.Modal.getInstance(document.getElementById('createDesignationModal')).hide();
+                        location.reload();
+                    } else alert('Error: ' + (d.error || 'Failed'));
+                });
+            });
+        }
+
+        // === CREATE USER ===
+        const userForm = document.getElementById('createUserForm');
+        if (userForm) {
+            const groupSelect = document.getElementById('user_group');
+            const designationField = document.getElementById('designation_field_user');
+            const designationSelect = document.getElementById('user_designation');
+
+            groupSelect.addEventListener('change', function() {
+                if (this.value === 'Admin Staff') {
+                    designationField.style.display = 'block';
+                    designationSelect.setAttribute('required', 'required');
+                } else {
+                    designationField.style.display = 'none';
+                    designationSelect.removeAttribute('required');
+                    designationSelect.value = '';
+                }
+            });
+
+            userForm.addEventListener('submit', function (e) {
+                e.preventDefault();
+                const username = document.getElementById('user_username').value.trim();
+                const password = document.getElementById('user_password').value;
+                const group = document.getElementById('user_group').value;
+                const designation = document.getElementById('user_designation').value;
+
+                if (!username || !password || !group) return alert('Fill required fields');
+                if (group === 'Admin Staff' && !designation) return alert('Designation required');
+                if (password.length < 8) return alert('Password too short');
+
+                fetch("{% url 'user_create_api' %}", {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': getCsrfToken(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, user_group: group, designation })
+                })
+                .then(r => r.json())
+                .then(d => {
+                    if (d.id) {
+                        alert('User created!');
+                        bootstrap.Modal.getInstance(document.getElementById('createUserModal')).hide();
+                        userForm.reset();
+                        designationField.style.display = 'none';
+                        location.reload();
+                    } else alert('Error: ' + (d.error || 'Failed'));
+                });
+            });
+        }
+
+        // === APPROVAL CONTROL ===
+        const controlModal = document.getElementById('approvalControlModal');
+        if (controlModal) {
+            const list = document.getElementById('approvalLevelsList');
+            const select = document.getElementById('addDesignationSelect');
+            const addBtn = document.getElementById('addDesignationBtn');
+            const saveBtn = document.getElementById('saveApprovalControl');
+            let allDesignations = [], currentLevels = [];
+
+            function render() {
+                list.innerHTML = '';
+                currentLevels.forEach((lvl, idx) => {
+                    const item = document.createElement('div');
+                    item.className = 'list-group-item d-flex justify-content-between align-items-center';
+                    item.draggable = true;
+                    item.dataset.id = lvl.id;
+                    item.innerHTML = `
+                        <div class="d-flex align-items-center gap-3">
+                            <i class="bi bi-grip-vertical grip-handle"></i>
+                            <strong>${idx + 1}.</strong>
+                            <span>${lvl.name}</span>
+                        </div>
+                        <div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" ${lvl.is_active ? 'checked' : ''}>
+                                <label class="form-check-label">Active</label>
+                            </div>
+                            <button class="btn btn-sm btn-danger ms-2 remove-level">Remove</button>
+                        </div>
+                    `;
+                    list.appendChild(item);
+                });
+                const used = currentLevels.map(l => l.id);
+                select.innerHTML = '<option value="">-- Add Designation --</option>';
+                allDesignations.forEach(d => {
+                    if (!used.includes(d.id)) {
+                        const opt = document.createElement('option');
+                        opt.value = d.id;
+                        opt.textContent = d.name;
+                        select.appendChild(opt);
+                    }
+                });
+            }
+
+            fetch("{% url 'approval_control_api' %}").then(r => r.json()).then(data => {
+                allDesignations = data.all_designations;
+                currentLevels = data.levels.map(l => ({ id: l.id, name: l.name, is_active: l.is_active }));
+                render();
+            });
+
+            let dragged;
+            list.addEventListener('dragstart', e => { dragged = e.target.closest('.list-group-item'); });
+            list.addEventListener('dragover', e => e.preventDefault());
+            list.addEventListener('drop', e => {
+                e.preventDefault();
+                const after = [...list.querySelectorAll('.list-group-item')].reduce((closest, child) => {
+                    const box = child.getBoundingClientRect();
+                    const offset = e.clientY - box.top - box.height / 2;
+                    if (offset < 0 && offset > closest.offset) return { offset, element: child };
+                    return closest;
+                }, { offset: Number.NEGATIVE_INFINITY }).element;
+                if (after == null) list.appendChild(dragged);
+                else list.insertBefore(dragged, after);
+            });
+
+            addBtn.onclick = () => {
+                const id = parseInt(select.value);
+                const name = select.selectedOptions[0].textContent;
+                if (id) { currentLevels.push({ id, name, is_active: true }); render(); }
+            };
+
+            list.onclick = e => {
+                const item = e.target.closest('.list-group-item');
+                if (!item) return;
+                if (e.target.classList.contains('remove-level')) {
+                    currentLevels = currentLevels.filter(l => l.id != item.dataset.id);
+                    render();
+                } else if (e.target.type === 'checkbox') {
+                    const lvl = currentLevels.find(l => l.id == item.dataset.id);
+                    if (lvl) lvl.is_active = e.target.checked;
+                }
+            };
+
+            saveBtn.onclick = () => {
+                const levels = Array.from(list.children).map(el => ({
+                    id: parseInt(el.dataset.id),
+                    is_active: el.querySelector('input[type="checkbox"]').checked
+                }));
+                fetch("{% url 'approval_control_api' %}", {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': getCsrfToken(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ levels })
+                })
+                .then(r => r.json())
+                .then(d => {
+                    alert(d.message || 'Saved!');
+                    bootstrap.Modal.getInstance(controlModal).hide();
+                    location.reload();
+                });
+            };
+        }
+
+        // === CREATE VOUCHER ===
+        const voucherModal = document.getElementById('createVoucherModal');
+        if (voucherModal) {
+            const form = document.getElementById('createVoucherForm');
+            const tbody = document.getElementById('particularsBody');
+            const addBtn = document.getElementById('addParticular');
+            let index = 1;
+
+            const paymentTypeSelect = document.getElementById('payment_type');
+            const chequeField = document.getElementById('chequeNumberField');
+            const chequeInput = document.getElementById('cheque_number');
+
+            const toggleCheque = () => {
+                if (paymentTypeSelect.value === 'CHEQUE') {
+                    chequeField.style.display = 'block';
+                    chequeInput.required = true;
+                } else {
+                    chequeField.style.display = 'none';
+                    chequeInput.required = false;
+                    chequeInput.value = '';
+                }
+            };
+            paymentTypeSelect.addEventListener('change', toggleCheque);
+            toggleCheque();
+
+            document.getElementById('attachment').addEventListener('change', e => {
+                document.getElementById('fileName').textContent = e.target.files[0]?.name ? `Selected: ${e.target.files[0].name}` : '';
+            });
+
+            addBtn.onclick = () => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><input type="text" class="form-control form-control-sm" name="particulars[${index}][description]" required></td>
+                    <td><input type="number" step="0.01" class="form-control form-control-sm" name="particulars[${index}][amount]" required></td>
+                    <td><input type="file" class="form-control form-control-sm" name="particulars[${index}][attachment]"></td>
+                    <td><button type="button" class="btn btn-sm btn-danger remove-row">Remove</button></td>
+                `;
+                tbody.appendChild(row);
+                index++;
+            };
+
+            tbody.onclick = e => {
+                if (e.target.classList.contains('remove-row') && tbody.children.length > 1)
+                    e.target.closest('tr').remove();
+            };
+
+            form.onsubmit = e => {
+                e.preventDefault();
+                const voucherDate = document.getElementById('voucher_date').value;
+                const paymentType = document.getElementById('payment_type').value;
+                const nameTitle = document.getElementById('name_title').value;
+                const payTo = document.getElementById('pay_to').value.trim();
+                const attachment = document.getElementById('attachment').files[0];
+
+                if (!voucherDate || !paymentType || !nameTitle || !payTo || !attachment)
+                    return alert('Fill all required fields');
+
+                const formData = new FormData();
+                formData.append('voucher_date', voucherDate);
+                formData.append('payment_type', paymentType);
+                formData.append('name_title', nameTitle);
+                formData.append('pay_to', payTo);
+                formData.append('attachment', attachment);
+                if (paymentType === 'CHEQUE') {
+                    const cn = chequeInput.value.trim();
+                    if (!cn) return alert('Cheque number required');
+                    formData.append('cheque_number', cn);
+                }
+
+                let valid = true;
+                document.querySelectorAll('#particularsBody tr').forEach((row, i) => {
+                    const desc = row.querySelector('input[name$="[description]"]').value.trim();
+                    const amt = row.querySelector('input[name$="[amount]"]').value.trim();
+                    if (desc && amt) {
+                        formData.append(`particulars[${i}][description]`, desc);
+                        formData.append(`particulars[${i}][amount]`, amt);
+                        const file = row.querySelector('input[type="file"]').files[0];
+                        if (file) formData.append(`particulars[${i}][attachment]`, file);
+                    } else valid = false;
+                });
+
+                if (!valid || tbody.children.length === 0)
+                    return alert('Add at least one particular');
+
+                fetch("{% url 'voucher_create_api' %}", {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': getCsrfToken() },
+                    body: formData
+                })
+                .then(r => r.ok ? r.json() : r.json().then(err => Promise.reject(err)))
+                .then(data => {
+                    document.getElementById('successMessage').textContent =
+                        data.message || `Voucher ${data.voucher?.voucher_number || ''} created!`;
+                    const successModal = new bootstrap.Modal(document.getElementById('successModal'));
+                    successModal.show();
+                    bootstrap.Modal.getInstance(voucherModal).hide();
+                    form.reset();
+                    document.getElementById('fileName').textContent = '';
+                    tbody.innerHTML = `<tr>
+                        <td><input type="text" class="form-control form-control-sm" name="particulars[0][description]" required></td>
+                        <td><input type="number" step="0.01" class="form-control form-control-sm" name="particulars[0][amount]" required></td>
+                        <td><input type="file" class="form-control form-control-sm" name="particulars[0][attachment]"></td>
+                        <td><button type="button" class="btn btn-sm btn-danger remove-row">Remove</button></td>
+                    </tr>`;
+                    index = 1;
+                    document.getElementById('successOkBtn').onclick = () => location.reload();
+                })
+                .catch(err => alert('Failed: ' + (err.error || JSON.stringify(err))));
+            };
+        }
+
+        // === APPROVE/REJECT, FILTER, SEARCH (unchanged) ===
+        // ... your existing code here ...
+    });
+    </script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

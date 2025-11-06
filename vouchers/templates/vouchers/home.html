@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+{% if not user.is_authenticated %}
+<div class="d-flex justify-content-center align-items-center min-vh-100">
+    <a href="{% url 'login' %}" class="btn btn-primary btn-lg px-5 py-3 shadow-lg">
+        Login
+    </a>
+</div>
+{% else %}
+<div class="container mt-5">
+    <div class="text-center">
+        <div class="mb-4 d-flex justify-content-center gap-3 flex-wrap">
+            <a href="{% url 'voucher_list' %}" class="btn btn-primary btn-lg px-5 shadow-sm">
+                View Vouchers
+            </a>
+
+            {% if is_accountant %}
+            <button class="btn btn-success btn-lg px-5 shadow-sm" 
+                    data-bs-toggle="modal" 
+                    data-bs-target="#createVoucherModal">
+                Create Voucher
+            </button>
+            {% endif %}
+        </div>
+
+        {% if is_superuser %}
+        <div class="d-flex justify-content-center gap-3 flex-wrap mt-4">
+            <button class="btn btn-warning btn-lg px-5 shadow-sm" 
+                    data-bs-toggle="modal" 
+                    data-bs-target="#createUserModal">
+                Create User
+            </button>
+            <button class="btn btn-warning btn-lg px-5 shadow-sm" 
+                    data-bs-toggle="modal" 
+                    data-bs-target="#createDesignationModal">
+                Create Designation
+            </button>
+            <button class="btn btn-warning btn-lg px-5 shadow-sm" 
+                    data-bs-toggle="modal" 
+                    data-bs-target="#approvalControlModal">
+                Control Approval
+            </button>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
