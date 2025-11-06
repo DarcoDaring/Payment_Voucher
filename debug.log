@@ -155,3 +155,12 @@ Watching for file changes with StatReloader
 Not Found: /media/vouchers/attachments/Screenshot_30.png
 "GET /media/vouchers/attachments/Screenshot_30.png HTTP/1.1" 404 179
 D:\Internship\PV4\voucher_system\voucher_system\settings.py changed, reloading.
+Watching for file changes with StatReloader
+"GET / HTTP/1.1" 200 27791
+Not Found: /favicon.ico
+"GET /favicon.ico HTTP/1.1" 404 179
+"GET /vouchers/ HTTP/1.1" 200 70264
+"GET /vouchers/59/ HTTP/1.1" 200 39889
+Not Found: /media/vouchers/particulars/Screenshot_32_TchyUZJ.png
+"GET /media/vouchers/particulars/Screenshot_32_TchyUZJ.png HTTP/1.1" 404 179
+D:\Internship\PV4\voucher_system\voucher_system\settings.py changed, reloading.

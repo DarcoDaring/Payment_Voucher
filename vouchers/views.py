@@ -352,7 +352,12 @@ class VoucherCreateAPI(AccountantRequiredMixin, APIView):
         serializer = VoucherSerializer(data=serializer_data, context={'request': request})
         if serializer.is_valid():
             voucher = serializer.save(created_by=request.user)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            # SUCCESS RESPONSE WITH MESSAGE
+            return Response({
+                'success': True,
+                'message': f'Voucher {voucher.voucher_number} created successfully!',
+                'voucher': serializer.data
+            }, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
