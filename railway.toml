@@ -1,5 +1,6 @@
 [build]
 builder = "RAILPACK"
+buildCommand = "python manage.py collectstatic --noinput"
 
 [deploy]
 startCommand = "gunicorn voucher_system.wsgi:application --bind 0.0.0.0:$PORT"
