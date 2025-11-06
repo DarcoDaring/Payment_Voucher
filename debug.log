@@ -74,3 +74,17 @@ D:\Internship\PV4\voucher_system\voucher_system\urls.py changed, reloading.
 Watching for file changes with StatReloader
 D:\Internship\PV4\voucher_system\voucher_system\settings.py changed, reloading.
 Watching for file changes with StatReloader
+Not Found: /media/vouchers/attachments/Screenshot_30_QunAkIZ.png
+"GET /media/vouchers/attachments/Screenshot_30_QunAkIZ.png HTTP/1.1" 404 179
+Not Found: /media/vouchers/attachments/Screenshot_30_QunAkIZ.png
+"GET /media/vouchers/attachments/Screenshot_30_QunAkIZ.png HTTP/1.1" 404 179
+"GET / HTTP/1.1" 200 27462
+"GET /vouchers/ HTTP/1.1" 200 40795
+"POST /api/vouchers/create/ HTTP/1.1" 201 461
+"GET /vouchers/ HTTP/1.1" 200 44444
+"GET /vouchers/36/ HTTP/1.1" 200 38387
+Not Found: /media/vouchers/attachments/Screenshot_31.png
+"GET /media/vouchers/attachments/Screenshot_31.png HTTP/1.1" 404 179
+"GET /vouchers/35/ HTTP/1.1" 200 38395
+Not Found: /media/vouchers/attachments/Screenshot_30_QunAkIZ.png
+"GET /media/vouchers/attachments/Screenshot_30_QunAkIZ.png HTTP/1.1" 404 179
