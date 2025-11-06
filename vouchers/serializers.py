@@ -1,9 +1,7 @@
-# vouchers/serializers.py
 from rest_framework import serializers
-from .models import Voucher, Particular, VoucherApproval, ActiveApprovalDesignation
+from .models import Voucher, Particular, VoucherApproval, ApprovalLevel
 from django.contrib.auth.models import User
 from django.core.validators import FileExtensionValidator
-from django.db.models import Count, Case, When, IntegerField
 from decimal import Decimal, InvalidOperation
 
 
@@ -59,7 +57,7 @@ class VoucherSerializer(serializers.ModelSerializer):
         ]
     )
 
-    # NEW: CHEQUE NUMBER
+    # CHEQUE NUMBER
     cheque_number = serializers.CharField(
         max_length=20,
         required=False,
@@ -76,7 +74,7 @@ class VoucherSerializer(serializers.ModelSerializer):
         model = Voucher
         fields = [
             'id', 'voucher_number', 'voucher_date', 'payment_type', 'name_title', 'pay_to',
-            'cheque_number',  # ← ADDED
+            'cheque_number',
             'attachment', 'created_by', 'created_at', 'status',
             'particulars', 'approvals', 'required_approvers',
             'approved_count', 'rejected_count'
@@ -85,19 +83,9 @@ class VoucherSerializer(serializers.ModelSerializer):
             'voucher_number', 'created_by', 'created_at', 'status', 'approvals'
         ]
 
+    # UPDATED: Use model property (handles snapshot vs dynamic)
     def get_required_approvers(self, obj):
-        active_des_ids = ActiveApprovalDesignation.objects.filter(
-            is_active=True
-        ).values_list('designation__id', flat=True)
-
-        return list(
-            User.objects.filter(
-                groups__name='Admin Staff',
-                userprofile__designation__id__in=active_des_ids
-            )
-            .values_list('username', flat=True)
-            .distinct()
-        )
+        return obj.required_approvers  # Already correct per status
 
     def get_approved_count(self, obj):
         return obj.approvals.filter(status='APPROVED').count()
@@ -143,14 +131,18 @@ class VoucherSerializer(serializers.ModelSerializer):
         particulars_data = validated_data.pop('particulars', [])
         attachment = validated_data.pop('attachment', None)
         
-        voucher = Voucher.objects.create(
-            attachment=attachment,
-            created_by=validated_data['created_by'],
-            **{k: v for k, v in validated_data.items() if k != 'created_by'}
-        )
+        # created_by comes from view context
+        created_by = validated_data.pop('created_by', None)
+        if created_by:
+            validated_data['created_by'] = created_by
+
+        # Create voucher → triggers save() → saves snapshot
+        voucher = Voucher.objects.create(attachment=attachment, **validated_data)
 
         for p_data in particulars_data:
             p_attachment = p_data.pop('attachment', None)
             Particular.objects.create(voucher=voucher, attachment=p_attachment, **p_data)
 
         return voucher
+    
+

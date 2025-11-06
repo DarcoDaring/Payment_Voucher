@@ -106,14 +106,22 @@
             <div class="d-flex gap-2">
                 <a href="{% url 'voucher_list' %}" class="btn btn-secondary">Back to List</a>
 
-                {% if is_admin_staff and voucher.status == 'PENDING' %}
+                {% if user.groups.all.0.name == 'Admin Staff' and voucher.status == 'PENDING' %}
                     {% if not user_approval %}
-                        <button class="btn btn-success approve-btn" data-id="{{ voucher.id }}" data-status="APPROVED">
-                            Approve
-                        </button>
-                        <button class="btn btn-danger approve-btn" data-id="{{ voucher.id }}" data-status="REJECTED">
-                            Reject
-                        </button>
+                        <!-- NEW: HIDE BUTTONS IF CANNOT APPROVE -->
+                        {% if can_approve %}
+                            <button class="btn btn-success approve-btn" data-id="{{ voucher.id }}" data-status="APPROVED">
+                                Approve
+                            </button>
+                            <button class="btn btn-danger approve-btn" data-id="{{ voucher.id }}" data-status="REJECTED">
+                                Reject
+                            </button>
+                        {% else %}
+                            <div class="text-muted small">
+                                <i class="bi bi-clock-history"></i>
+                                Waiting for <strong>{{ waiting_for_designation }}</strong> to approve first.
+                            </div>
+                        {% endif %}
                     {% else %}
                         {% if user_approval.status == 'APPROVED' %}
                             <button class="btn btn-success" disabled>Approved</button>
@@ -126,7 +134,7 @@
                 <!-- PRINT BUTTON: ONLY WHEN APPROVED -->
                 {% if voucher.status == 'APPROVED' %}
                 <button onclick="window.print()" class="btn btn-info">
-                    Print Voucher
+                    <i class="bi bi-printer"></i> Print Voucher
                 </button>
                 {% endif %}
             </div>
@@ -146,7 +154,7 @@
                 <div class="row">
                     <div class="col-md-4">
                         <h6 class="text-success">Approved ({{ voucher.approved_count|default:0 }})</h6>
-                        <ul class="list-group">
+                        <ul class="list-group" id="approved-list">
                             {% for approval in voucher.approvals.all %}
                                 {% if approval.status == 'APPROVED' %}
                                     <li class="list-group-item d-flex justify-content-between">
@@ -161,7 +169,7 @@
                     </div>
                     <div class="col-md-4">
                         <h6 class="text-danger">Rejected ({{ voucher.rejected_count|default:0 }})</h6>
-                        <ul class="list-group">
+                        <ul class="list-group" id="rejected-list">
                             {% for approval in voucher.approvals.all %}
                                 {% if approval.status == 'REJECTED' %}
                                     <li class="list-group-item d-flex justify-content-between">
@@ -176,9 +184,9 @@
                     </div>
                     <div class="col-md-4">
                         <h6 class="text-secondary">
-                            Pending ({{ voucher.required_approvers|length|sub:voucher.approved_count|default:0 }})
+                            Pending (<span id="pending-count">{{ voucher.required_approvers|length|sub:voucher.approved_count|default:0 }}</span>)
                         </h6>
-                        <ul class="list-group">
+                        <ul class="list-group" id="pending-list">
                             {% for item in pending_approvers %}
                                 {% if not item.has_approved %}
                                     <li class="list-group-item">{{ item.name }}</li>
@@ -197,7 +205,7 @@
     </div>
 </div>
 
-<!-- PRINTABLE SECTION -->
+<!-- PRINTABLE VOUCHER SECTION (HIDDEN ON SCREEN) -->
 <div id="print-section" style="display: none;">
     <div style="padding: 40px; font-family: Arial, sans-serif; max-width: 800px; margin: auto;">
         <!-- Header -->
@@ -273,11 +281,25 @@
     </div>
 </div>
 
+<!-- PRINT STYLES -->
 <style>
 @media print {
-    body * { visibility: hidden; }
-    #print-section, #print-section * { visibility: visible; }
-    #print-section { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
+    body * {
+        visibility: hidden;
+    }
+    #print-section, #print-section * {
+        visibility: visible;
+    }
+    #print-section {
+        display: block !important;
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+    }
+    .no-print {
+        display: none !important;
+    }
 }
 </style>
 
@@ -290,7 +312,9 @@ document.addEventListener('DOMContentLoaded', function () {
             const id = this.dataset.id;
             const status = this.dataset.status;
             const isApprove = status === 'APPROVED';
+            const buttonContainer = this.parentElement;
 
+            // Disable both buttons
             document.querySelectorAll('.approve-btn').forEach(b => {
                 b.disabled = true;
                 b.style.opacity = '0.6';
@@ -306,6 +330,20 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .then(r => r.json())
             .then(data => {
+                // === HANDLE can_approve: false ===
+                if (data.can_approve === false) {
+                    // Remove buttons
+                    document.querySelectorAll('.approve-btn').forEach(b => b.remove());
+
+                    // Show waiting message
+                    const waitMsg = document.createElement('div');
+                    waitMsg.className = 'text-muted small';
+                    waitMsg.innerHTML = `<i class="bi bi-clock-history"></i> Waiting for <strong>${data.waiting_for}</strong> to approve first.`;
+                    buttonContainer.appendChild(waitMsg);
+                    return;
+                }
+
+                // === SUCCESS: APPROVED OR REJECTED ===
                 this.textContent = isApprove ? 'Approved' : 'Rejected';
                 this.className = isApprove ? 'btn btn-success' : 'btn btn-danger';
                 this.disabled = true;
@@ -313,6 +351,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const other = document.querySelector(`.approve-btn[data-status="${isApprove ? 'REJECTED' : 'APPROVED'}"]`);
                 if (other) other.style.display = 'none';
 
+                // Update status badge
                 const badge = document.getElementById('status-badge');
                 if (data.status === 'APPROVED')
                     badge.innerHTML = '<span class="badge bg-success">Approved</span>';
@@ -321,6 +360,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 else
                     badge.innerHTML = '<span class="badge bg-warning text-dark">Pending</span>';
 
+                // Update progress bar
                 const total = data.required_approvers.length;
                 const approved = data.approved_count;
                 const percent = total > 0 ? (approved / total) * 100 : 0;
@@ -329,6 +369,49 @@ document.addEventListener('DOMContentLoaded', function () {
                 bar.textContent = `${approved} / ${total}`;
                 document.getElementById('required-list').textContent = `Required: ${data.required_approvers.join(', ')}`;
 
+                // === UPDATE MODAL ===
+                const approvedList = document.getElementById('approved-list');
+                approvedList.innerHTML = '';
+                data.approvals.filter(a => a.status === 'APPROVED').forEach(a => {
+                    const li = document.createElement('li');
+                    li.className = 'list-group-item d-flex justify-content-between';
+                    li.innerHTML = `<span>${a.approver}</span><small class="text-muted">${a.approved_at}</small>`;
+                    approvedList.appendChild(li);
+                });
+                if (approvedList.children.length === 0) {
+                    approvedList.innerHTML = '<li class="list-group-item text-muted">None</li>';
+                }
+
+                const rejectedList = document.getElementById('rejected-list');
+                rejectedList.innerHTML = '';
+                data.approvals.filter(a => a.status === 'REJECTED').forEach(a => {
+                    const li = document.createElement('li');
+                    li.className = 'list-group-item d-flex justify-content-between';
+                    li.innerHTML = `<span>${a.approver}</span><small class="text-muted">${a.approved_at}</small>`;
+                    rejectedList.appendChild(li);
+                });
+                if (rejectedList.children.length === 0) {
+                    rejectedList.innerHTML = '<li class="list-group-item text-muted">None</li>';
+                }
+
+                const pendingList = document.getElementById('pending-list');
+                pendingList.innerHTML = '';
+                const approvedUsernames = data.approvals.filter(a => a.status === 'APPROVED').map(a => a.approver);
+                data.required_approvers.forEach(name => {
+                    if (!approvedUsernames.includes(name)) {
+                        const li = document.createElement('li');
+                        li.className = 'list-group-item';
+                        li.textContent = name;
+                        pendingList.appendChild(li);
+                    }
+                });
+                if (pendingList.children.length === 0) {
+                    pendingList.innerHTML = '<li class="list-group-item text-muted">No one required</li>';
+                }
+
+                document.getElementById('pending-count').textContent = data.required_approvers.length - data.approved_count;
+
+                // Reload page if now APPROVED to show Print button
                 if (data.status === 'APPROVED') {
                     setTimeout(() => location.reload(), 800);
                 }

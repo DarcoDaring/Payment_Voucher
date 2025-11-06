@@ -38,6 +38,10 @@
         .navbar .dropdown-toggle::after {
             display: none;
         }
+
+        /* DRAG HANDLE */
+        .grip-handle { cursor: move; color: #6c757d; }
+        .list-group-item:hover .grip-handle { color: #495057; }
     </style>
 
     <!-- CSRF TOKEN IN JS (GLOBAL & SAFE) -->
@@ -51,7 +55,7 @@
     <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm">
         <div class="container-fluid">
             <a class="navbar-brand fw-bold" href="{% url 'home' %}">
-                <i class="bi bi-file-earmark-text"></i> Voucher System
+                Voucher System
             </a>
 
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
@@ -63,7 +67,7 @@
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'voucher_list' %}">
-                            <i class="bi bi-list-ul"></i> Vouchers
+                            Vouchers
                         </a>
                     </li>
                 </ul>
@@ -74,15 +78,14 @@
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle text-primary fw-bold d-flex align-items-center gap-2" 
                                href="#" role="button" data-bs-toggle="dropdown" style="text-decoration: none;">
-                                <i class="bi bi-person-circle fs-5"></i>
-                                <span>{{ user.username }}</span>
+                                {{ user.username }}
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end shadow">
                                 <!-- ONLY SUPERUSER SEES ADMIN PANEL -->
                                 {% if user.is_superuser %}
                                 <li>
                                     <a class="dropdown-item" href="{% url 'admin:index' %}">
-                                        <i class="bi bi-gear"></i> Admin Panel
+                                        Admin Panel
                                     </a>
                                 </li>
                                 <li><hr class="dropdown-divider"></li>
@@ -92,7 +95,7 @@
                                        data-bs-toggle="modal" 
                                        data-bs-target="#logoutModal" 
                                        style="cursor: pointer;">
-                                        <i class="bi bi-box-arrow-right"></i> Logout
+                                        Logout
                                     </a>
                                 </li>
                             </ul>
@@ -100,7 +103,7 @@
                     {% else %}
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'login' %}">
-                                <i class="bi bi-box-arrow-in-right"></i> Login
+                                Login
                             </a>
                         </li>
                     {% endif %}
@@ -221,7 +224,7 @@
     </div>
     {% endif %}
 
-    <!-- CONTROL APPROVAL MODAL -->
+    <!-- CONTROL APPROVAL MODAL (NEW: DRAG & DROP) -->
     {% if user.is_superuser %}
     <div class="modal fade" id="approvalControlModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
@@ -231,35 +234,18 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <p class="text-muted">Select which designations can approve vouchers.</p>
-                    <form id="approvalControlForm">
-                        <div class="row">
-                            {% for designation in designations %}
-                            <div class="col-md-6 mb-2">
-                                <div class="form-check">
-                                    <input class="form-check-input designation-checkbox" 
-                                           type="checkbox" 
-                                           value="{{ designation.id }}" 
-                                           id="des_{{ designation.id }}">
-                                    <label class="form-check-label" for="des_{{ designation.id }}">
-                                        {{ designation.name }}
-                                    </label>
-                                </div>
-                            </div>
-                            {% empty %}
-                            <div class="col-12">
-                                <p class="text-muted">No designations. Create one first.</p>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </form>
+                    <p class="text-muted">Drag to reorder. Only <strong>active</strong> designations require approval.</p>
+                    <div id="approvalLevelsList" class="list-group"></div>
                     <div class="mt-3">
-                        <small class="text-success fw-bold" id="activeCount">0 active</small>
+                        <select id="addDesignationSelect" class="form-select">
+                            <option value="">-- Add Designation --</option>
+                        </select>
+                        <button id="addDesignationBtn" class="btn btn-sm btn-outline-primary mt-2">Add</button>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" id="saveApprovalControl">Save Changes</button>
+                    <button type="button" class="btn btn-primary" id="saveApprovalControl">Save Order</button>
                 </div>
             </div>
         </div>
@@ -355,7 +341,7 @@
     <!-- BOOTSTRAP & JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-    <!-- GLOBAL JS (ALL AJAX USES window.csrfToken) -->
+    <!-- GLOBAL JS -->
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         const getCsrfToken = () => window.csrfToken;
@@ -453,31 +439,136 @@
             });
         }
 
-        // === CONTROL APPROVAL ===
-        {% if user.is_superuser and request.resolver_match.url_name == 'home' %}
+        // === CONTROL APPROVAL (NEW: DRAG & DROP) ===
         const controlModal = document.getElementById('approvalControlModal');
         if (controlModal) {
-            fetch("{% url 'approval_control_api' %}", {
-                method: 'GET',
-                headers: { 'X-CSRFToken': getCsrfToken() }
-            })
-            .then(r => r.json())
-            .then(data => {
-                document.querySelectorAll('.designation-checkbox').forEach(cb => {
-                    if (data.active_designations.includes(parseInt(cb.value))) cb.checked = true;
+            const list = document.getElementById('approvalLevelsList');
+            const select = document.getElementById('addDesignationSelect');
+            const addBtn = document.getElementById('addDesignationBtn');
+            const saveBtn = document.getElementById('saveApprovalControl');
+
+            let allDesignations = [];
+            let currentLevels = [];
+
+            function render() {
+                list.innerHTML = '';
+                currentLevels.forEach((lvl, idx) => {
+                    const item = document.createElement('div');
+                    item.className = 'list-group-item d-flex justify-content-between align-items-center';
+                    item.draggable = true;
+                    item.dataset.id = lvl.id;
+                    item.innerHTML = `
+                        <div class="d-flex align-items-center gap-3">
+                            <i class="bi bi-grip-vertical grip-handle"></i>
+                            <strong>${idx + 1}.</strong>
+                            <span>${lvl.name}</span>
+                        </div>
+                        <div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" ${lvl.is_active ? 'checked' : ''}>
+                                <label class="form-check-label">Active</label>
+                            </div>
+                            <button class="btn btn-sm btn-danger ms-2 remove-level">Remove</button>
+                        </div>
+                    `;
+                    list.appendChild(item);
                 });
-                updateCount();
+
+                // Update select
+                const used = currentLevels.map(l => l.id);
+                select.innerHTML = '<option value="">-- Add Designation --</option>';
+                allDesignations.forEach(d => {
+                    if (!used.includes(d.id)) {
+                        const opt = document.createElement('option');
+                        opt.value = d.id;
+                        opt.textContent = d.name;
+                        select.appendChild(opt);
+                    }
+                });
+            }
+
+            // Load data
+            fetch("{% url 'approval_control_api' %}")
+                .then(r => r.json())
+                .then(data => {
+                    allDesignations = data.all_designations;
+                    currentLevels = data.levels.map(l => ({
+                        id: l.id,
+                        name: l.name,
+                        is_active: l.is_active
+                    }));
+                    render();
+                });
+
+            // Drag & Drop
+            let dragged;
+            list.addEventListener('dragstart', e => {
+                dragged = e.target.closest('.list-group-item');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            list.addEventListener('dragover', e => e.preventDefault());
+            list.addEventListener('drop', e => {
+                e.preventDefault();
+                const after = getDragAfter(list, e.clientY);
+                if (after == null) {
+                    list.appendChild(dragged);
+                } else {
+                    list.insertBefore(dragged, after);
+                }
             });
 
-            document.getElementById('saveApprovalControl').addEventListener('click', () => {
-                const active = Array.from(document.querySelectorAll('.designation-checkbox:checked')).map(cb => cb.value);
+            function getDragAfter(container, y) {
+                const items = [...container.querySelectorAll('.list-group-item')];
+                return items.reduce((closest, child) => {
+                    const box = child.getBoundingClientRect();
+                    const offset = y - box.top - box.height / 2;
+                    if (offset < 0 && offset > closest.offset) {
+                        return { offset, element: child };
+                    }
+                    return closest;
+                }, { offset: Number.NEGATIVE_INFINITY }).element;
+            }
+
+            // Add
+            addBtn.addEventListener('click', () => {
+                const id = parseInt(select.value);
+                const name = select.selectedOptions[0].textContent;
+                if (id) {
+                    currentLevels.push({ id, name, is_active: true });
+                    render();
+                }
+            });
+
+            // Remove & Toggle
+            list.addEventListener('click', e => {
+                const item = e.target.closest('.list-group-item');
+                if (!item) return;
+                if (e.target.classList.contains('remove-level')) {
+                    const id = parseInt(item.dataset.id);
+                    currentLevels = currentLevels.filter(l => l.id !== id);
+                    render();
+                } else if (e.target.type === 'checkbox') {
+                    const id = parseInt(item.dataset.id);
+                    const lvl = currentLevels.find(l => l.id === id);
+                    if (lvl) lvl.is_active = e.target.checked;
+                }
+            });
+
+            // Save
+            saveBtn.addEventListener('click', () => {
+                const levels = Array.from(list.children).map(el => {
+                    const id = parseInt(el.dataset.id);
+                    const is_active = el.querySelector('input[type="checkbox"]').checked;
+                    return { id, is_active };
+                });
+
                 fetch("{% url 'approval_control_api' %}", {
                     method: 'POST',
                     headers: {
                         'X-CSRFToken': getCsrfToken(),
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ active_designations: active })
+                    body: JSON.stringify({ levels })
                 })
                 .then(r => r.json())
                 .then(d => {
@@ -486,14 +577,7 @@
                     location.reload();
                 });
             });
-
-            function updateCount() {
-                const count = document.querySelectorAll('.designation-checkbox:checked').length;
-                document.getElementById('activeCount').textContent = `${count} active`;
-            }
-            document.querySelectorAll('.designation-checkbox').forEach(cb => cb.addEventListener('change', updateCount));
         }
-        {% endif %}
 
         // === CREATE VOUCHER ===
         const voucherModal = document.getElementById('createVoucherModal');
@@ -503,7 +587,6 @@
             const addBtn = document.getElementById('addParticular');
             let index = 1;
 
-            // === CHEQUE NUMBER TOGGLE ===
             const paymentTypeSelect = document.getElementById('payment_type');
             const chequeField = document.getElementById('chequeNumberField');
             const chequeInput = document.getElementById('cheque_number');
@@ -520,7 +603,7 @@
             }
 
             paymentTypeSelect.addEventListener('change', toggleChequeField);
-            toggleChequeField(); // Run on load
+            toggleChequeField();
 
             document.getElementById('attachment').addEventListener('change', function () {
                 const fileName = this.files[0]?.name || '';
@@ -567,9 +650,7 @@
 
                 if (paymentType === 'CHEQUE') {
                     const chequeNum = chequeInput.value.trim();
-                    if (!chequeNum) {
-                        return alert('Cheque number is required.');
-                    }
+                    if (!chequeNum) return alert('Cheque number is required.');
                     formData.append('cheque_number', chequeNum);
                 }
 
@@ -623,7 +704,7 @@
             });
         }
 
-        // === LIVE APPROVE/REJECT (LIST + DETAIL) ===
+        // === LIVE APPROVE/REJECT ===
         document.querySelectorAll('.approve-btn').forEach(btn => {
             btn.addEventListener('click', function () {
                 const id = this.dataset.id;
@@ -682,7 +763,7 @@
             });
         });
 
-        // === FILTER & SEARCH (LIST ONLY) ===
+        // === FILTER & SEARCH ===
         const filterBtns = document.querySelectorAll('.filter-btn');
         const searchInput = document.getElementById('searchInput');
         if (filterBtns.length) {

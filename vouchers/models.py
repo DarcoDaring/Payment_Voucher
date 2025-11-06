@@ -1,4 +1,3 @@
-# vouchers/models.py
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -13,12 +12,14 @@ class Designation(models.Model):
     def __str__(self):
         return self.name
 
+
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     designation = models.ForeignKey(Designation, on_delete=models.SET_NULL, null=True, blank=True)
 
     def __str__(self):
         return f"{self.user.username} - {self.designation}"
+
 
 class Voucher(models.Model):
     PAYMENT_TYPES = (
@@ -50,6 +51,13 @@ class Voucher(models.Model):
         default='PENDING'
     )
 
+    # NEW: Store required approvers at creation time
+    required_approvers_snapshot = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of usernames required at voucher creation time"
+    )
+
     def save(self, *args, **kwargs):
         if not self.voucher_number:
             last_voucher = Voucher.objects.order_by('-id').first()
@@ -58,27 +66,49 @@ class Voucher(models.Model):
                 self.voucher_number = f'VCH{num:04d}'
             else:
                 self.voucher_number = 'VCH0001'
-        super().save(*args, **kwargs)
+
+        # Save snapshot on first save (creation)
+        if not self.pk:
+            super().save(*args, **kwargs)  # Save first to get PK
+            self.required_approvers_snapshot = self._get_current_required_approvers()
+            self.save(update_fields=['required_approvers_snapshot'])
+        else:
+            super().save(*args, **kwargs)
+
+    def _get_current_required_approvers(self):
+        """Helper: Get current required approvers from active levels."""
+        levels = ApprovalLevel.objects.filter(is_active=True).select_related('designation').order_by('order')
+        usernames = []
+        for level in levels:
+            users = UserProfile.objects.filter(
+                designation=level.designation,
+                user__groups__name='Admin Staff'
+            ).values_list('user__username', flat=True).distinct()
+            usernames.extend(users)
+        return usernames
 
     def __str__(self):
         return self.voucher_number
 
     @property
     def required_approvers(self):
-        active_des_ids = ActiveApprovalDesignation.objects.filter(
-            is_active=True
-        ).values_list('designation__id', flat=True)
-        
-        return [
-            profile.user.username for profile in UserProfile.objects.filter(
-                user__groups__name='Admin Staff',
-                designation__id__in=active_des_ids
-            ).select_related('user').distinct()
-        ]
+        """
+        Return required approvers:
+        - For APPROVED/REJECTED: Use snapshot (locked at creation)
+        - For PENDING: Use current active levels (dynamic)
+        """
+        if self.status in ['APPROVED', 'REJECTED']:
+            return self.required_approvers_snapshot or []
+        else:
+            return self._get_current_required_approvers()
 
     def _update_status_if_all_approved(self):
-        required = self.required_approvers
+        """Update voucher status based on approvals and rejections."""
+        required = self.required_approvers  # Uses snapshot for approved, dynamic for pending
+
         if not required:
+            self.status = 'APPROVED'
+            self.save(update_fields=['status'])
             return
 
         approved_count = self.approvals.filter(status='APPROVED').count()
@@ -122,15 +152,21 @@ class VoucherApproval(models.Model):
         return f"{self.approver} - {self.status}"
 
 
-class ActiveApprovalDesignation(models.Model):
-    designation = models.ForeignKey(Designation, on_delete=models.CASCADE, unique=True)
-    is_active = models.BooleanField(default=True)
+# === ORDERED APPROVAL LEVELS ===
+class ApprovalLevel(models.Model):
+    designation = models.OneToOneField(Designation, on_delete=models.CASCADE)
+    order = models.PositiveIntegerField(unique=True, help_text="Lower number = earlier in approval chain")
+    is_active = models.BooleanField(default=True, help_text="Only active levels require approval")
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = "Active Approval Designation"
-        verbose_name_plural = "Active Approval Designations"
+        ordering = ['order']
+        verbose_name = "Approval Level"
+        verbose_name_plural = "Approval Levels"
 
     def __str__(self):
-        return f"{self.designation.name} - {'Active' if self.is_active else 'Inactive'}"
+        return f"{self.order}. {self.designation.name} ({'Active' if self.is_active else 'Inactive'})"
+    
+
+

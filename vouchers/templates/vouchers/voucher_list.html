@@ -9,13 +9,13 @@
     <!-- ACTION BAR -->
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <div class="btn-group" role="group">
-            {% if is_accountant %}
+            {% if user.groups.all.0.name == 'Accountants' %}
             <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createVoucherModal">
                 Create Voucher
             </button>
             {% endif %}
-            <button class="btn btn-outline-primary filter-btn active" data-status="">All</button>
-            <button class="btn btn-outline-warning filter-btn" data-status="PENDING">Pending</button>
+
+            <button class="btn btn-outline-warning filter-btn active" data-status="PENDING">Pending</button>
             <button class="btn btn-outline-success filter-btn" data-status="APPROVED">Approved</button>
             <button class="btn btn-outline-danger filter-btn" data-status="REJECTED">Rejected</button>
         </div>
@@ -39,7 +39,7 @@
                     <th>Actions</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="voucher-tbody">
                 {% for voucher in vouchers %}
                 <tr class="voucher-row"
                     data-voucher-id="{{ voucher.id }}"
@@ -86,7 +86,7 @@
                         <a href="{% url 'voucher_detail' voucher.id %}"
                            class="btn btn-info btn-sm">View</a>
 
-                        {% if is_admin_staff and voucher.status == 'PENDING' %}
+                        {% if user.groups.all.0.name == 'Admin Staff' and voucher.status == 'PENDING' %}
                             {% if voucher.user_approval %}
                                 {% if voucher.user_approval.status == 'APPROVED' %}
                                     <span class="badge bg-success">Approved</span>
@@ -94,26 +94,44 @@
                                     <span class="badge bg-danger">Rejected</span>
                                 {% endif %}
                             {% else %}
-                                <button class="btn btn-success btn-sm approve-btn"
-                                        data-id="{{ voucher.id }}" data-status="APPROVED">Approve</button>
-                                <button class="btn btn-danger btn-sm approve-btn"
-                                        data-id="{{ voucher.id }}" data-status="REJECTED">Reject</button>
+                                {% if voucher.can_approve %}
+                                    <button class="btn btn-success btn-sm approve-btn"
+                                            data-id="{{ voucher.id }}" data-status="APPROVED">Approve</button>
+                                    <button class="btn btn-danger btn-sm approve-btn"
+                                            data-id="{{ voucher.id }}" data-status="REJECTED">Reject</button>
+                                {% else %}
+                                    <div class="text-muted small">
+                                        <i class="bi bi-clock-history"></i>
+                                        Waiting for <strong>{{ voucher.waiting_for_designation }}</strong>
+                                    </div>
+                                {% endif %}
                             {% endif %}
                         {% endif %}
 
-                        <!-- DELETE BUTTON: SUPERUSER ONLY -->
                         {% if user.is_superuser %}
                         <button class="btn btn-danger btn-sm delete-voucher-btn"
                                 data-id="{{ voucher.id }}"
                                 data-number="{{ voucher.voucher_number }}">
-                            Delete
+                            <i class="bi bi-trash"></i> Delete
                         </button>
                         {% endif %}
                     </td>
                 </tr>
-                {% empty %}
-                <tr><td colspan="6" class="text-center text-muted py-4">No vouchers found.</td></tr>
                 {% endfor %}
+
+                <!-- NO PENDING MESSAGE -->
+                <tr id="no-pending-row" class="d-none">
+                    <td colspan="6" class="text-center text-muted py-4">
+                        <em>No pending vouchers.</em>
+                    </td>
+                </tr>
+
+                <!-- NO VOUCHERS AT ALL -->
+                {% if not vouchers %}
+                <tr id="no-vouchers-row">
+                    <td colspan="6" class="text-center text-muted py-4">No vouchers found.</td>
+                </tr>
+                {% endif %}
             </tbody>
         </table>
     </div>
@@ -208,36 +226,78 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
-    const getCsrfToken = () => csrf;
+    const tbody = document.getElementById('voucher-tbody');
+    const noPendingRow = document.getElementById('no-pending-row');
+    const noVouchersRow = document.getElementById('no-vouchers-row');
 
-    // FILTER & SEARCH
+    // === HELPER: UPDATE EMPTY STATES ===
+    function updateEmptyStates() {
+        const visibleRows = Array.from(document.querySelectorAll('.voucher-row'))
+                              .filter(r => r.style.display !== 'none');
+
+        // Hide both messages
+        noPendingRow.classList.add('d-none');
+        if (noVouchersRow) noVouchersRow.classList.add('d-none');
+
+        if (visibleRows.length === 0) {
+            const activeStatus = document.querySelector('.filter-btn.active').dataset.status;
+            if (activeStatus === 'PENDING') {
+                noPendingRow.classList.remove('d-none');
+            } else if (!noVouchersRow) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td colspan="6" class="text-center text-muted py-4">No vouchers found.</td>`;
+                tbody.appendChild(tr);
+            }
+        }
+    }
+
+    // === DEFAULT: SHOW ONLY PENDING ON LOAD ===
+    document.querySelectorAll('.voucher-row').forEach(row => {
+        row.style.display = (row.dataset.status === 'PENDING') ? '' : 'none';
+    });
+    updateEmptyStates();
+
+    // === FILTER BUTTONS ===
     document.querySelectorAll('.filter-btn').forEach(btn => {
         btn.addEventListener('click', function () {
             document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
             this.classList.add('active');
             const status = this.dataset.status;
+
             document.querySelectorAll('.voucher-row').forEach(row => {
-                row.style.display = (status === '' || row.dataset.status === status) ? '' : 'none';
+                row.style.display = (row.dataset.status === status) ? '' : 'none';
             });
+
+            updateEmptyStates();
         });
     });
 
+    // === SEARCH: CLEAR RETURNS TO CURRENT FILTER ===
     document.getElementById('searchInput').addEventListener('input', function () {
-        const q = this.value.toLowerCase();
+        const q = this.value.trim().toLowerCase();
+        const activeStatus = document.querySelector('.filter-btn.active').dataset.status;
+
         document.querySelectorAll('.voucher-row').forEach(row => {
-            const payTo = row.dataset.payTo;
-            const particulars = row.dataset.particulars;
-            row.style.display = (payTo.includes(q) || particulars.includes(q)) ? '' : 'none';
+            const matchesSearch = q === '' ||
+                row.dataset.payTo.includes(q) ||
+                row.dataset.particulars.includes(q);
+
+            const matchesFilter = row.dataset.status === activeStatus;
+
+            row.style.display = (matchesSearch && matchesFilter) ? '' : 'none';
         });
+
+        updateEmptyStates();
     });
 
-    // LIVE APPROVE / REJECT
+    // === LIVE APPROVE / REJECT ===
     document.querySelectorAll('.approve-btn').forEach(btn => {
         btn.addEventListener('click', function () {
             const id = this.dataset.id;
             const status = this.dataset.status;
             const isApprove = status === 'APPROVED';
             const row = this.closest('tr');
+            const actionCell = row.querySelector('.action-cell');
 
             row.querySelectorAll('.approve-btn').forEach(b => {
                 b.disabled = true;
@@ -254,6 +314,15 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .then(r => r.json())
             .then(data => {
+                if (data.can_approve === false) {
+                    row.querySelectorAll('.approve-btn').forEach(b => b.remove());
+                    const waitMsg = document.createElement('div');
+                    waitMsg.className = 'text-muted small';
+                    waitMsg.innerHTML = `<i class="bi bi-clock-history"></i> Waiting for <strong>${data.waiting_for}</strong>`;
+                    actionCell.insertBefore(waitMsg, actionCell.querySelector('.btn-info').nextSibling);
+                    return;
+                }
+
                 this.textContent = isApprove ? 'Approved' : 'Rejected';
                 this.className = isApprove ? 'btn btn-success btn-sm' : 'btn btn-danger btn-sm';
                 this.disabled = true;
@@ -273,10 +342,10 @@ document.addEventListener('DOMContentLoaded', function () {
                     row.dataset.status = 'PENDING';
                 }
 
-                // UPDATE MODAL
-                const modalId = `approvalModal${id}`;
-                const modal = document.getElementById(modalId);
+                // === UPDATE MODAL ===
+                const modal = document.getElementById(`approvalModal${id}`);
                 if (modal) {
+                    // Approved
                     const approvedList = modal.querySelector(`#approved-list-${id}`);
                     approvedList.innerHTML = '';
                     data.approvals.filter(a => a.status === 'APPROVED').forEach(a => {
@@ -289,6 +358,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         approvedList.innerHTML = '<li class="list-group-item text-muted">None</li>';
                     }
 
+                    // Rejected
                     const rejectedList = modal.querySelector(`#rejected-list-${id}`);
                     rejectedList.innerHTML = '';
                     data.approvals.filter(a => a.status === 'REJECTED').forEach(a => {
@@ -301,6 +371,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         rejectedList.innerHTML = '<li class="list-group-item text-muted">None</li>';
                     }
 
+                    // Pending
                     const pendingList = modal.querySelector(`#pending-list-${id}`);
                     pendingList.innerHTML = '';
                     const approvedUsernames = data.approvals.filter(a => a.status === 'APPROVED').map(a => a.approver);
@@ -316,9 +387,14 @@ document.addEventListener('DOMContentLoaded', function () {
                         pendingList.innerHTML = '<li class="list-group-item text-muted">No one required</li>';
                     }
 
-                    const pendingCount = modal.querySelector(`#pending-count-${id}`);
-                    pendingCount.textContent = data.required_approvers.length - data.approved_count;
+                    modal.querySelector(`#pending-count-${id}`).textContent = data.required_approvers.length - data.approved_count;
                 }
+
+                // Re-apply filter
+                const activeStatus = document.querySelector('.filter-btn.active').dataset.status;
+                row.style.display = (row.dataset.status === activeStatus) ? '' : 'none';
+
+                updateEmptyStates();
             })
             .catch(() => {
                 alert('Approval failed.');
@@ -332,7 +408,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // === DELETE VOUCHER ===
     let voucherToDelete = null;
-
     document.querySelectorAll('.delete-voucher-btn').forEach(btn => {
         btn.addEventListener('click', function () {
             voucherToDelete = this.dataset.id;
@@ -347,17 +422,18 @@ document.addEventListener('DOMContentLoaded', function () {
         fetch(`/api/vouchers/${voucherToDelete}/delete/`, {
             method: 'DELETE',
             headers: {
-                'X-CSRFToken': getCsrfToken(),
+                'X-CSRFToken': csrf,
                 'Content-Type': 'application/json'
             }
         })
         .then(r => {
             if (r.ok) {
-                document.querySelector(`.voucher-row[data-voucher-id="${voucherToDelete}"]`).remove();
+                const row = document.querySelector(`.voucher-row[data-voucher-id="${voucherToDelete}"]`);
+                if (row) row.remove();
                 bootstrap.Modal.getInstance(document.getElementById('deleteVoucherModal')).hide();
-                alert('Voucher deleted successfully.');
+                updateEmptyStates();
             } else {
-                r.json().then(d => alert('Error: ' + (d.error || 'Failed to delete')));
+                r.json().then(d => alert('Error: ' + (d.error || 'Failed')));
             }
         })
         .catch(() => alert('Network error.'));
