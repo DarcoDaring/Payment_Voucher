@@ -17,7 +17,9 @@ from django.contrib.auth.hashers import make_password
 from django.db import transaction, OperationalError
 from django.db.models import F
 from decimal import Decimal, InvalidOperation
+from django.conf import settings  # ← NEW: For MEDIA_ROOT debug
 import time
+import os  # ← NEW: For file existence check
 
 
 # === MIXINS ===
@@ -224,6 +226,17 @@ class VoucherCreateAPI(AccountantRequiredMixin, APIView):
         serializer = VoucherSerializer(data=serializer_data, context={'request': request})
         if serializer.is_valid():
             voucher = serializer.save(created_by=request.user)
+            
+            # === DEBUG PRINTS: PROOF OF UPLOAD ===
+            print("\n" + "="*60)
+            print("FILE UPLOADED SUCCESSFULLY!")
+            print(f"   Voucher: {voucher.voucher_number}")
+            print(f"   File URL: {voucher.attachment.url}")
+            print(f"   File Path: {voucher.attachment.path}")
+            print(f"   File Exists? {os.path.exists(voucher.attachment.path)}")
+            print(f"   MEDIA_ROOT: {settings.MEDIA_ROOT}")
+            print("="*60 + "\n")
+
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

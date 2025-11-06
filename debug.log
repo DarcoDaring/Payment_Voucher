@@ -90,3 +90,68 @@ Not Found: /media/vouchers/attachments/Screenshot_30_QunAkIZ.png
 "GET /media/vouchers/attachments/Screenshot_30_QunAkIZ.png HTTP/1.1" 404 179
 D:\Internship\PV4\voucher_system\voucher_system\urls.py changed, reloading.
 Watching for file changes with StatReloader
+Not Found: /media/vouchers/attachments/Screenshot_30_QunAkIZ.png
+"GET /media/vouchers/attachments/Screenshot_30_QunAkIZ.png HTTP/1.1" 404 179
+D:\Internship\PV4\voucher_system\voucher_system\settings.py changed, reloading.
+Watching for file changes with StatReloader
+"GET / HTTP/1.1" 200 27462
+"GET /vouchers/ HTTP/1.1" 200 44444
+"GET /vouchers/35/ HTTP/1.1" 200 38395
+Not Found: /media/vouchers/attachments/Screenshot_30_QunAkIZ.png
+"GET /media/vouchers/attachments/Screenshot_30_QunAkIZ.png HTTP/1.1" 404 179
+Watching for file changes with StatReloader
+"GET / HTTP/1.1" 200 27462
+"GET /vouchers/ HTTP/1.1" 200 44444
+"GET /vouchers/35/ HTTP/1.1" 200 38395
+Not Found: /media/vouchers/attachments/Screenshot_30_QunAkIZ.png
+"GET /media/vouchers/attachments/Screenshot_30_QunAkIZ.png HTTP/1.1" 404 179
+Not Found: /media/vouchers/attachments/Screenshot_30_QunAkIZ.png
+"GET /media/vouchers/attachments/Screenshot_30_QunAkIZ.png HTTP/1.1" 404 179
+Watching for file changes with StatReloader
+"GET / HTTP/1.1" 200 27462
+"POST /accounts/logout/ HTTP/1.1" 302 0
+"GET / HTTP/1.1" 200 19698
+"GET /accounts/login/ HTTP/1.1" 200 21812
+"POST /accounts/login/ HTTP/1.1" 200 22061
+"POST /accounts/login/ HTTP/1.1" 302 0
+"GET / HTTP/1.1" 200 37919
+"GET /api/approval/control/ HTTP/1.1" 200 160
+"GET /vouchers/ HTTP/1.1" 200 53779
+"DELETE /api/vouchers/35/delete/ HTTP/1.1" 200 51
+"DELETE /api/vouchers/36/delete/ HTTP/1.1" 200 51
+"POST /accounts/logout/ HTTP/1.1" 302 0
+"GET / HTTP/1.1" 200 19698
+"GET /accounts/login/ HTTP/1.1" 200 21812
+"POST /accounts/login/ HTTP/1.1" 302 0
+"GET / HTTP/1.1" 200 27462
+"POST /api/vouchers/create/ HTTP/1.1" 201 461
+"GET / HTTP/1.1" 200 27462
+"GET /vouchers/ HTTP/1.1" 200 40795
+"GET /vouchers/37/ HTTP/1.1" 200 38387
+Not Found: /media/vouchers/attachments/Screenshot_30.png
+"GET /media/vouchers/attachments/Screenshot_30.png HTTP/1.1" 404 179
+D:\Internship\PV4\voucher_system\voucher_system\settings.py changed, reloading.
+Watching for file changes with StatReloader
+Watching for file changes with StatReloader
+"GET / HTTP/1.1" 200 27462
+"GET /vouchers/ HTTP/1.1" 200 40795
+"GET /vouchers/37/ HTTP/1.1" 200 38387
+Not Found: /media/vouchers/attachments/Screenshot_30.png
+"GET /media/vouchers/attachments/Screenshot_30.png HTTP/1.1" 404 179
+"GET /vouchers/ HTTP/1.1" 200 40795
+"POST /api/vouchers/create/ HTTP/1.1" 201 469
+"GET /vouchers/ HTTP/1.1" 200 44444
+"GET /vouchers/38/ HTTP/1.1" 200 38395
+Not Found: /media/vouchers/attachments/Screenshot_30_uBsD3Wt.png
+"GET /media/vouchers/attachments/Screenshot_30_uBsD3Wt.png HTTP/1.1" 404 179
+"GET /vouchers/ HTTP/1.1" 200 44444
+"GET /vouchers/37/ HTTP/1.1" 200 38387
+Not Found: /media/vouchers/attachments/Screenshot_30.png
+"GET /media/vouchers/attachments/Screenshot_30.png HTTP/1.1" 404 179
+Watching for file changes with StatReloader
+"GET / HTTP/1.1" 200 27462
+"GET /vouchers/ HTTP/1.1" 200 44444
+"GET /vouchers/37/ HTTP/1.1" 200 38387
+Not Found: /media/vouchers/attachments/Screenshot_30.png
+"GET /media/vouchers/attachments/Screenshot_30.png HTTP/1.1" 404 179
+D:\Internship\PV4\voucher_system\voucher_system\settings.py changed, reloading.
