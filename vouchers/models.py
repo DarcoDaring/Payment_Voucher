@@ -16,6 +16,14 @@ class Designation(models.Model):
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     designation = models.ForeignKey(Designation, on_delete=models.SET_NULL, null=True, blank=True)
+    
+    # NEW: User signature
+    signature = models.ImageField(
+        upload_to='signatures/',
+        null=True,
+        blank=True,
+        help_text="Upload your digital signature (PNG/JPG, transparent background recommended)"
+    )
 
     def __str__(self):
         return f"{self.user.username} - {self.designation}"
@@ -152,6 +160,9 @@ class VoucherApproval(models.Model):
     approver = models.ForeignKey(User, on_delete=models.CASCADE)
     status = models.CharField(max_length=10, choices=[('APPROVED', 'Approved'), ('REJECTED', 'Rejected')])
     approved_at = models.DateTimeField(auto_now_add=True)
+
+    # NEW: Rejection reason (only for REJECTED)
+    rejection_reason = models.TextField(blank=True, null=True, help_text="Required when status is REJECTED")
 
     class Meta:
         unique_together = ('voucher', 'approver')

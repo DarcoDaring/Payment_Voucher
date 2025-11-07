@@ -37,10 +37,11 @@ class ParticularSerializer(serializers.ModelSerializer):
 class VoucherApprovalSerializer(serializers.ModelSerializer):
     approver = serializers.ReadOnlyField(source='approver.username')
     approved_at = serializers.DateTimeField(format="%d %b %H:%M", read_only=True)
+    rejection_reason = serializers.CharField(read_only=True, allow_null=True, allow_blank=True)
 
     class Meta:
         model = VoucherApproval
-        fields = ['approver', 'status', 'approved_at']
+        fields = ['approver', 'status', 'approved_at', 'rejection_reason']
 
 
 class VoucherSerializer(serializers.ModelSerializer):

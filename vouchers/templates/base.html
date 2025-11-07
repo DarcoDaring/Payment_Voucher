@@ -150,7 +150,7 @@
     <div class="modal fade" id="createUserModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
-                <form id="createUserForm">
+                <form id="createUserForm" enctype="multipart/form-data">
                     <div class="modal-header">
                         <h5 class="modal-title">Create New User</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -181,6 +181,12 @@
                                 {% endfor %}
                             </select>
                         </div>
+                        <!-- NEW: SIGNATURE UPLOAD -->
+                        <div class="mb-3">
+                            <label for="user_signature" class="form-label">Signature (Optional)</label>
+                            <input type="file" class="form-control form-control-sm" id="user_signature" name="signature" accept="image/png,image/jpeg">
+                            <div class="form-text">Upload a clear PNG/JPG of your signature (transparent background preferred).</div>
+                        </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -202,7 +208,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <p class="text-muted">Drag to reorder. Only <strong>active</strong> designations require approval.</p>
+                    <p class="text-muted">Drag to reorder. All designations are active by default.</p>
                     <div id="approvalLevelsList" class="list-group"></div>
                     <div class="mt-3">
                         <select id="addDesignationSelect" class="form-select">
@@ -235,7 +241,6 @@
                             <thead class="table-light">
                                 <tr>
                                     <th>Username</th>
-                                    <th>Full Name</th>
                                     <th>Group</th>
                                     <th>Designation</th>
                                     <th>Status</th>
@@ -246,7 +251,6 @@
                                 {% for u in all_users %}
                                 <tr data-user-id="{{ u.id }}">
                                     <td>{{ u.username }}</td>
-                                    <td>{{ u.get_full_name|default:"—" }}</td>
                                     <td>{{ u.groups.all.0.name|default:"—" }}</td>
                                     <td>{{ u.userprofile.designation.name|default:"—" }}</td>
                                     <td>
@@ -258,17 +262,16 @@
                                         <button class="btn btn-sm btn-outline-primary edit-user-btn"
                                                 data-id="{{ u.id }}"
                                                 data-username="{{ u.username }}"
-                                                data-first-name="{{ u.first_name }}"
-                                                data-last-name="{{ u.last_name }}"
                                                 data-group="{{ u.groups.all.0.name|default:'' }}"
                                                 data-designation="{{ u.userprofile.designation.id|default:'' }}"
-                                                data-active="{{ u.is_active|yesno:'true,false' }}">
+                                                data-active="{{ u.is_active|yesno:'true,false' }}"
+                                                data-signature="{% if u.userprofile.signature %}{{ u.userprofile.signature.url }}{% endif %}">
                                             Edit
                                         </button>
                                     </td>
                                 </tr>
                                 {% empty %}
-                                <tr><td colspan="6" class="text-center text-muted">No users found.</td></tr>
+                                <tr><td colspan="5" class="text-center text-muted">No users found.</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>
@@ -285,7 +288,7 @@
     <div class="modal fade" id="editUserModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
-                <form id="editUserForm">
+                <form id="editUserForm" enctype="multipart/form-data">
                     <div class="modal-header">
                         <h5 class="modal-title">Edit User</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -293,26 +296,18 @@
                     <div class="modal-body">
                         <input type="hidden" id="edit_user_id">
                         <div class="mb-3">
-                            <label class="form-label">Username</label>
-                            <input type="text" class="form-control" id="edit_username" disabled>
+                            <label class="form-label">Username <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="edit_username" required maxlength="150">
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">First Name</label>
-                            <input type="text" class="form-control" id="edit_first_name" maxlength="150">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Last Name</label>
-                            <input type="text" class="form-control" id="edit_last_name" maxlength="150">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Group</label>
+                            <label class="form-label">Group <span class="text-danger">*</span></label>
                             <select class="form-select" id="edit_user_group" required>
                                 <option value="Accountants">Accountants</option>
                                 <option value="Admin Staff">Admin Staff</option>
                             </select>
                         </div>
                         <div class="mb-3" id="edit_designation_field" style="display:none;">
-                            <label class="form-label">Designation</label>
+                            <label class="form-label">Designation <span class="text-danger">*</span></label>
                             <select class="form-select" id="edit_user_designation">
                                 <option value="">-- Select Designation --</option>
                                 {% for des in designations %}
@@ -325,6 +320,16 @@
                             <div class="form-check form-switch">
                                 <input class="form-check-input" type="checkbox" id="edit_user_active">
                                 <label class="form-check-label" for="edit_user_active">Active</label>
+                            </div>
+                        </div>
+                        <!-- NEW: SIGNATURE UPLOAD + PREVIEW -->
+                        <div class="mb-3">
+                            <label class="form-label">Signature</label>
+                            <input type="file" class="form-control form-control-sm" id="edit_user_signature" name="signature" accept="image/png,image/jpeg">
+                            <div class="form-text">Leave blank to keep current signature.</div>
+                            <div id="currentSignaturePreview" class="mt-2 text-center" style="display:none;">
+                                <p class="small text-muted mb-1">Current Signature:</p>
+                                <img id="currentSignatureImg" src="" alt="Current Signature" style="max-height: 60px; border: 1px dashed #ccc; padding: 5px;">
                             </div>
                         </div>
                     </div>
@@ -498,19 +503,22 @@
 
             userForm.addEventListener('submit', function (e) {
                 e.preventDefault();
-                const username = document.getElementById('user_username').value.trim();
-                const password = document.getElementById('user_password').value;
-                const group = document.getElementById('user_group').value;
+                const formData = new FormData();
+                formData.append('username', document.getElementById('user_username').value.trim());
+                formData.append('password', document.getElementById('user_password').value);
+                formData.append('user_group', document.getElementById('user_group').value);
                 const designation = document.getElementById('user_designation').value;
-
-                if (!username || !password || !group) return alert('Fill required fields');
-                if (group === 'Admin Staff' && !designation) return alert('Designation required');
-                if (password.length < 8) return alert('Password too short');
+                if (document.getElementById('user_group').value === 'Admin Staff') {
+                    if (!designation) return alert('Designation required for Admin Staff');
+                    formData.append('designation', designation);
+                }
+                const signature = document.getElementById('user_signature').files[0];
+                if (signature) formData.append('signature', signature);
 
                 fetch("{% url 'user_create_api' %}", {
                     method: 'POST',
-                    headers: { 'X-CSRFToken': getCsrfToken(), 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password, user_group: group, designation })
+                    headers: { 'X-CSRFToken': getCsrfToken() },
+                    body: formData
                 })
                 .then(r => r.json())
                 .then(d => {
@@ -518,14 +526,14 @@
                         alert('User created!');
                         bootstrap.Modal.getInstance(document.getElementById('createUserModal')).hide();
                         userForm.reset();
-                        designationField.style.display = 'none';
+                        document.getElementById('designation_field_user').style.display = 'none';
                         location.reload();
                     } else alert('Error: ' + (d.error || 'Failed'));
                 });
             });
         }
 
-        // === APPROVAL CONTROL ===
+        // === APPROVAL CONTROL (ACTIVE TOGGLE REMOVED) ===
         const controlModal = document.getElementById('approvalControlModal');
         if (controlModal) {
             const list = document.getElementById('approvalLevelsList');
@@ -548,10 +556,6 @@
                             <span>${lvl.name}</span>
                         </div>
                         <div>
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" ${lvl.is_active ? 'checked' : ''}>
-                                <label class="form-check-label">Active</label>
-                            </div>
                             <button class="btn btn-sm btn-danger ms-2 remove-level">Remove</button>
                         </div>
                     `;
@@ -571,7 +575,7 @@
 
             fetch("{% url 'approval_control_api' %}").then(r => r.json()).then(data => {
                 allDesignations = data.all_designations;
-                currentLevels = data.levels.map(l => ({ id: l.id, name: l.name, is_active: l.is_active }));
+                currentLevels = data.levels.map(l => ({ id: l.id, name: l.name }));
                 render();
             });
 
@@ -593,7 +597,7 @@
             addBtn.onclick = () => {
                 const id = parseInt(select.value);
                 const name = select.selectedOptions[0].textContent;
-                if (id) { currentLevels.push({ id, name, is_active: true }); render(); }
+                if (id) { currentLevels.push({ id, name }); render(); }
             };
 
             list.onclick = e => {
@@ -602,16 +606,12 @@
                 if (e.target.classList.contains('remove-level')) {
                     currentLevels = currentLevels.filter(l => l.id != item.dataset.id);
                     render();
-                } else if (e.target.type === 'checkbox') {
-                    const lvl = currentLevels.find(l => l.id == item.dataset.id);
-                    if (lvl) lvl.is_active = e.target.checked;
                 }
             };
 
             saveBtn.onclick = () => {
                 const levels = Array.from(list.children).map(el => ({
-                    id: parseInt(el.dataset.id),
-                    is_active: el.querySelector('input[type="checkbox"]').checked
+                    id: parseInt(el.dataset.id)
                 }));
                 fetch("{% url 'approval_control_api' %}", {
                     method: 'POST',
@@ -638,23 +638,23 @@
             const paymentTypeSelect = document.getElementById('payment_type');
             const chequeField = document.getElementById('chequeNumberField');
             const chequeInput = document.getElementById('cheque_number');
-            const chequeAttachmentField = document.getElementById('chequeAttachmentField'); // NEW
-            const chequeAttachmentInput = document.getElementById('cheque_attachment'); // NEW
+            const chequeAttachmentField = document.getElementById('chequeAttachmentField');
+            const chequeAttachmentInput = document.getElementById('cheque_attachment');
 
             const toggleCheque = () => {
                 if (paymentTypeSelect.value === 'CHEQUE') {
                     chequeField.style.display = 'block';
                     chequeInput.required = true;
-                    chequeAttachmentField.style.display = 'block'; // NEW
-                    chequeAttachmentInput.required = true; // NEW
+                    chequeAttachmentField.style.display = 'block';
+                    chequeAttachmentInput.required = true;
                 } else {
                     chequeField.style.display = 'none';
                     chequeInput.required = false;
                     chequeInput.value = '';
-                    chequeAttachmentField.style.display = 'none'; // NEW
-                    chequeAttachmentInput.required = false; // NEW
-                    chequeAttachmentInput.value = ''; // NEW
-                    document.getElementById('chequeFileName').textContent = ''; // NEW
+                    chequeAttachmentField.style.display = 'none';
+                    chequeAttachmentInput.required = false;
+                    chequeAttachmentInput.value = '';
+                    document.getElementById('chequeFileName').textContent = '';
                 }
             };
             paymentTypeSelect.addEventListener('change', toggleCheque);
@@ -664,7 +664,6 @@
                 document.getElementById('fileName').textContent = e.target.files[0]?.name ? `Selected: ${e.target.files[0].name}` : '';
             });
 
-            // NEW: Show filename for cheque attachment
             chequeAttachmentInput.addEventListener('change', e => {
                 document.getElementById('chequeFileName').textContent = e.target.files[0]?.name ? `Selected: ${e.target.files[0].name}` : '';
             });
@@ -709,9 +708,9 @@
                     if (!cn) return alert('Cheque number required');
                     formData.append('cheque_number', cn);
 
-                    const chequeFile = chequeAttachmentInput.files[0]; // NEW
-                    if (!chequeFile) return alert('Cheque attachment is required'); // NEW
-                    formData.append('cheque_attachment', chequeFile); // NEW
+                    const chequeFile = chequeAttachmentInput.files[0];
+                    if (!chequeFile) return alert('Cheque attachment is required');
+                    formData.append('cheque_attachment', chequeFile);
                 }
 
                 let valid = true;
@@ -743,7 +742,7 @@
                     bootstrap.Modal.getInstance(voucherModal).hide();
                     form.reset();
                     document.getElementById('fileName').textContent = '';
-                    document.getElementById('chequeFileName').textContent = ''; // NEW
+                    document.getElementById('chequeFileName').textContent = '';
                     tbody.innerHTML = `<tr>
                         <td><input type="text" class="form-control form-control-sm" name="particulars[0][description]" required></td>
                         <td><input type="number" step="0.01" class="form-control form-control-sm" name="particulars[0][amount]" required></td>
@@ -757,7 +756,7 @@
             };
         }
 
-        // === USER CONTROL & EDIT (NEW) ===
+        // === USER CONTROL & EDIT (UPDATED) ===
         const userControlModal = document.getElementById('userControlModal');
         if (userControlModal) {
             userControlModal.addEventListener('show.bs.modal', () => {
@@ -770,8 +769,6 @@
                 const modal = document.getElementById('editUserModal');
                 modal.querySelector('#edit_user_id').value = this.dataset.id;
                 modal.querySelector('#edit_username').value = this.dataset.username;
-                modal.querySelector('#edit_first_name').value = this.dataset.firstName;
-                modal.querySelector('#edit_last_name').value = this.dataset.lastName;
                 modal.querySelector('#edit_user_group').value = this.dataset.group;
                 modal.querySelector('#edit_user_active').checked = this.dataset.active === 'true';
 
@@ -787,6 +784,15 @@
                     desSelect.value = '';
                 }
 
+                const currentSigPreview = modal.querySelector('#currentSignaturePreview');
+                const currentSigImg = modal.querySelector('#currentSignatureImg');
+                if (this.dataset.signature) {
+                    currentSigImg.src = this.dataset.signature;
+                    currentSigPreview.style.display = 'block';
+                } else {
+                    currentSigPreview.style.display = 'none';
+                }
+
                 new bootstrap.Modal(modal).show();
             });
         });
@@ -795,28 +801,26 @@
         if (editForm) {
             editForm.addEventListener('submit', function (e) {
                 e.preventDefault();
-                const userId = this.querySelector('#edit_user_id').value;
-                const group = this.querySelector('#edit_user_group').value;
-                const designation = group === 'Admin Staff' ? this.querySelector('#edit_user_designation').value : null;
+                const formData = new FormData();
+                formData.append('user_id', this.querySelector('#edit_user_id').value);
+                formData.append('username', this.querySelector('#edit_username').value.trim());
+                formData.append('user_group', this.querySelector('#edit_user_group').value);
+                formData.append('is_active', this.querySelector('#edit_user_active').checked);
 
-                if (group === 'Admin Staff' && !designation) {
-                    return alert('Please select a designation for Admin Staff.');
+                const group = this.querySelector('#edit_user_group').value;
+                if (group === 'Admin Staff') {
+                    const des = this.querySelector('#edit_user_designation').value;
+                    if (!des) return alert('Please select a designation for Admin Staff.');
+                    formData.append('designation', des);
                 }
+
+                const signature = this.querySelector('#edit_user_signature').files[0];
+                if (signature) formData.append('signature', signature);
 
                 fetch("{% url 'user_update_api' %}", {
                     method: 'POST',
-                    headers: {
-                        'X-CSRFToken': getCsrfToken(),
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        user_id: userId,
-                        first_name: this.querySelector('#edit_first_name').value,
-                        last_name: this.querySelector('#edit_last_name').value,
-                        user_group: group,
-                        designation: designation,
-                        is_active: this.querySelector('#edit_user_active').checked
-                    })
+                    headers: { 'X-CSRFToken': getCsrfToken() },
+                    body: formData
                 })
                 .then(r => r.json())
                 .then(d => {

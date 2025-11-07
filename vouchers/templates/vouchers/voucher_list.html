@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load voucher_tags %}
+{% load voucher_extras %}
 
 {% block content %}
 <div class="container mt-4">
@@ -75,6 +76,8 @@
                                 <span class="badge bg-success">Approved</span>
                             {% elif voucher.status == 'REJECTED' %}
                                 <span class="badge bg-danger">Rejected</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Unknown</span>
                             {% endif %}
                         </a>
                     </td>
@@ -101,8 +104,7 @@
                                             data-id="{{ voucher.id }}" data-status="REJECTED">Reject</button>
                                 {% else %}
                                     <div class="text-muted small">
-                                        <i class="bi bi-clock-history"></i>
-                                        Waiting for <strong>{{ voucher.waiting_for_designation }}</strong>
+                                        Waiting for <strong>{{ voucher.waiting_for_username }}</strong>
                                     </div>
                                 {% endif %}
                             {% endif %}
@@ -112,7 +114,7 @@
                         <button class="btn btn-danger btn-sm delete-voucher-btn"
                                 data-id="{{ voucher.id }}"
                                 data-number="{{ voucher.voucher_number }}">
-                            <i class="bi bi-trash"></i> Delete
+                            Delete
                         </button>
                         {% endif %}
                     </td>
@@ -192,6 +194,25 @@
                             </ul>
                         </div>
                     </div>
+
+                    <!-- REJECTION REASON BOX (ONLY IF REJECTED) -->
+                    {% if voucher.status == 'REJECTED' %}
+                        {% with reject=voucher.approvals|first_rejected %}
+                            {% if reject.rejection_reason %}
+                                <div class="mt-4 p-3 bg-light border rounded">
+                                    <h6 class="text-danger mb-2">
+                                        Rejection Reason
+                                    </h6>
+                                    <p class="mb-0 text-danger fw-medium">
+                                        "{{ reject.rejection_reason }}"
+                                    </p>
+                                    <small class="text-muted">
+                                        by {{ reject.approver.username }} on {{ reject.approved_at|date:"d M Y, h:i A" }}
+                                    </small>
+                                </div>
+                            {% endif %}
+                        {% endwith %}
+                    {% endif %}
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -235,7 +256,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const visibleRows = Array.from(document.querySelectorAll('.voucher-row'))
                               .filter(r => r.style.display !== 'none');
 
-        // Hide both messages
         noPendingRow.classList.add('d-none');
         if (noVouchersRow) noVouchersRow.classList.add('d-none');
 
@@ -299,6 +319,16 @@ document.addEventListener('DOMContentLoaded', function () {
             const row = this.closest('tr');
             const actionCell = row.querySelector('.action-cell');
 
+            let payload = { status };
+            if (status === 'REJECTED') {
+                const reason = prompt('Please provide a reason for rejection:');
+                if (!reason || reason.trim() === '') {
+                    alert('Rejection reason is required.');
+                    return;
+                }
+                payload.rejection_reason = reason.trim();
+            }
+
             row.querySelectorAll('.approve-btn').forEach(b => {
                 b.disabled = true;
                 b.style.opacity = '0.6';
@@ -310,7 +340,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': csrf
                 },
-                body: JSON.stringify({ status })
+                body: JSON.stringify(payload)
             })
             .then(r => r.json())
             .then(data => {
@@ -318,7 +348,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     row.querySelectorAll('.approve-btn').forEach(b => b.remove());
                     const waitMsg = document.createElement('div');
                     waitMsg.className = 'text-muted small';
-                    waitMsg.innerHTML = `<i class="bi bi-clock-history"></i> Waiting for <strong>${data.waiting_for}</strong>`;
+                    waitMsg.innerHTML = `Waiting for <strong>${data.waiting_for}</strong>`;
                     actionCell.insertBefore(waitMsg, actionCell.querySelector('.btn-info').nextSibling);
                     return;
                 }
@@ -342,10 +372,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     row.dataset.status = 'PENDING';
                 }
 
-                // === UPDATE MODAL ===
                 const modal = document.getElementById(`approvalModal${id}`);
                 if (modal) {
-                    // Approved
+                    // Update Approved
                     const approvedList = modal.querySelector(`#approved-list-${id}`);
                     approvedList.innerHTML = '';
                     data.approvals.filter(a => a.status === 'APPROVED').forEach(a => {
@@ -358,7 +387,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         approvedList.innerHTML = '<li class="list-group-item text-muted">None</li>';
                     }
 
-                    // Rejected
+                    // Update Rejected (NO REASON HERE)
                     const rejectedList = modal.querySelector(`#rejected-list-${id}`);
                     rejectedList.innerHTML = '';
                     data.approvals.filter(a => a.status === 'REJECTED').forEach(a => {
@@ -371,7 +400,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         rejectedList.innerHTML = '<li class="list-group-item text-muted">None</li>';
                     }
 
-                    // Pending
+                    // Update Pending
                     const pendingList = modal.querySelector(`#pending-list-${id}`);
                     pendingList.innerHTML = '';
                     const approvedUsernames = data.approvals.filter(a => a.status === 'APPROVED').map(a => a.approver);
@@ -388,9 +417,37 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
 
                     modal.querySelector(`#pending-count-${id}`).textContent = data.required_approvers.length - data.approved_count;
+
+                    // Update Rejection Reason Box (SEPARATE)
+                    const reasonBox = modal.querySelector('.border.rounded.bg-light');
+                    if (data.status === 'REJECTED') {
+                        const firstReject = data.approvals.find(a => a.status === 'REJECTED');
+                        if (firstReject?.rejection_reason) {
+                            if (!reasonBox) {
+                                const box = document.createElement('div');
+                                box.className = 'mt-4 p-3 bg-light border rounded';
+                                box.innerHTML = `
+                                    <h6 class="text-danger mb-2">
+                                        Rejection Reason
+                                    </h6>
+                                    <p class="mb-0 text-danger fw-medium">
+                                        "${firstReject.rejection_reason}"
+                                    </p>
+                                    <small class="text-muted">
+                                        by ${firstReject.approver} on ${firstReject.approved_at}
+                                    </small>
+                                `;
+                                modal.querySelector('.modal-body').appendChild(box);
+                            } else {
+                                reasonBox.querySelector('p').textContent = `"${firstReject.rejection_reason}"`;
+                                reasonBox.querySelector('small').textContent = `by ${firstReject.approver} on ${firstReject.approved_at}`;
+                            }
+                        }
+                    } else if (reasonBox) {
+                        reasonBox.remove();
+                    }
                 }
 
-                // Re-apply filter
                 const activeStatus = document.querySelector('.filter-btn.active').dataset.status;
                 row.style.display = (row.dataset.status === activeStatus) ? '' : 'none';
 

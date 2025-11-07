@@ -142,37 +142,58 @@ class VoucherListView(LoginRequiredMixin, ListView):
                     })
                 voucher.approval_levels = level_data
 
-            # === CAN APPROVE & WAITING FOR (only for PENDING) ===
-            can_approve = True
-            waiting_for = None
+            # === CAN APPROVE & WAITING FOR (USERNAME) === [FIXED: SHOW TO ALL ADMIN STAFF]
+            can_approve = False
+            waiting_for_username = None
 
-            if (user.groups.filter(name='Admin Staff').exists() or user.is_superuser) and voucher.status == 'PENDING':
-                current_level = None
+            if voucher.status == 'PENDING':
+                # Find first pending level (same for everyone)
+                first_pending_level = None
                 levels = ApprovalLevel.objects.filter(is_active=True).order_by('order')
                 for lvl in levels:
-                    users_in_level = UserProfile.objects.filter(
+                    level_users = UserProfile.objects.filter(
                         designation=lvl.designation,
-                        user__groups__name='Admin Staff'
-                    ).values_list('user__username', flat=True)
-                    if user.username in users_in_level:
-                        current_level = lvl
+                        user__groups__name='Admin Staff',
+                        user__is_active=True
+                    ).values_list('user__id', flat=True)
+                    approved_in_level = voucher.approvals.filter(
+                        status='APPROVED',
+                        approver__id__in=level_users
+                    ).count()
+                    if approved_in_level < len(level_users):
+                        first_pending_level = lvl
                         break
 
-                if current_level:
-                    prev = ApprovalLevel.objects.filter(
-                        order__lt=current_level.order, is_active=True
-                    ).order_by('-order').first()
-                    if prev:
-                        prev_users = UserProfile.objects.filter(
-                            designation=prev.designation,
-                            user__groups__name='Admin Staff'
+                # === SHOW WAITING FOR TO ALL ADMIN STAFF (even if they approved) ===
+                if first_pending_level:
+                    pending_users = UserProfile.objects.filter(
+                        designation=first_pending_level.designation,
+                        user__groups__name='Admin Staff',
+                        user__is_active=True
+                    ).exclude(
+                        id__in=voucher.approvals.filter(status='APPROVED').values_list('approver__id', flat=True)
+                    ).values_list('user__username', flat=True)
+
+                    waiting_for_username = ", ".join(pending_users) if pending_users else "next level"
+
+                # === CAN APPROVE: Only if current user is in the pending level ===
+                if (user.groups.filter(name='Admin Staff').exists() or user.is_superuser):
+                    current_level = None
+                    for lvl in levels:
+                        users_in_level = UserProfile.objects.filter(
+                            designation=lvl.designation,
+                            user__groups__name='Admin Staff',
+                            user__is_active=True
                         ).values_list('user__username', flat=True)
-                        if not all(u in approved_usernames for u in prev_users):
-                            can_approve = False
-                            waiting_for = prev.designation.name
+                        if user.username in users_in_level:
+                            current_level = lvl
+                            break
+
+                    if current_level and first_pending_level == current_level:
+                        can_approve = True
 
             voucher.can_approve = can_approve
-            voucher.waiting_for_designation = waiting_for
+            voucher.waiting_for_username = waiting_for_username  # Now visible in list
 
         return context
 
@@ -257,9 +278,9 @@ class VoucherDetailView(LoginRequiredMixin, DetailView):
                 for name in snapshot
             ]
 
-        # === CAN APPROVE & WAITING FOR ===
+        # === CAN APPROVE & WAITING FOR (USERNAME) === [UNCHANGED]
         can_approve = True
-        waiting_for_designation = None
+        waiting_for_username = None
 
         if (user.groups.filter(name='Admin Staff').exists() or user.is_superuser) and voucher.status == 'PENDING':
             current_level = None
@@ -267,27 +288,45 @@ class VoucherDetailView(LoginRequiredMixin, DetailView):
             for lvl in levels:
                 users_in_level = UserProfile.objects.filter(
                     designation=lvl.designation,
-                    user__groups__name='Admin Staff'
+                    user__groups__name='Admin Staff',
+                    user__is_active=True
                 ).values_list('user__username', flat=True)
                 if user.username in users_in_level:
                     current_level = lvl
                     break
 
             if current_level:
-                prev_level = ApprovalLevel.objects.filter(
-                    order__lt=current_level.order, is_active=True
-                ).order_by('-order').first()
-                if prev_level:
-                    prev_users = UserProfile.objects.filter(
-                        designation=prev_level.designation,
-                        user__groups__name='Admin Staff'
+                first_pending_level = None
+                for lvl in levels:
+                    level_users = UserProfile.objects.filter(
+                        designation=lvl.designation,
+                        user__groups__name='Admin Staff',
+                        user__is_active=True
+                    ).values_list('user__id', flat=True)
+                    approved_in_level = voucher.approvals.filter(
+                        status='APPROVED',
+                        approver__id__in=level_users
+                    ).count()
+                    if approved_in_level < len(level_users):
+                        first_pending_level = lvl
+                        break
+
+                if first_pending_level:
+                    pending_users = UserProfile.objects.filter(
+                        designation=first_pending_level.designation,
+                        user__groups__name='Admin Staff',
+                        user__is_active=True
+                    ).exclude(
+                        id__in=voucher.approvals.filter(status='APPROVED').values_list('approver__id', flat=True)
                     ).values_list('user__username', flat=True)
-                    if not all(u in approved_usernames for u in prev_users):
-                        can_approve = False
-                        waiting_for_designation = prev_level.designation.name
+
+                    waiting_for_username = ", ".join(pending_users) if pending_users else "next level"
+
+                if first_pending_level != current_level:
+                    can_approve = False
 
         context['can_approve'] = can_approve
-        context['waiting_for_designation'] = waiting_for_designation
+        context['waiting_for_username'] = waiting_for_username
         context['user_profile'] = user.userprofile if hasattr(user, 'userprofile') else None
 
         return context
@@ -343,7 +382,7 @@ class VoucherCreateAPI(AccountantRequiredMixin, APIView):
             )
 
         cheque_number = data.get('cheque_number', '').strip() if data.get('payment_type') == 'CHEQUE' else None
-        cheque_attachment = files.get('cheque_attachment') if data.get('payment_type') == 'CHEQUE' else None  # NEW
+        cheque_attachment = files.get('cheque_attachment') if data.get('payment_type') == 'CHEQUE' else None
 
         serializer_data = {
             'voucher_date': data.get('voucher_date'),
@@ -351,19 +390,17 @@ class VoucherCreateAPI(AccountantRequiredMixin, APIView):
             'name_title': data.get('name_title'),
             'pay_to': data.get('pay_to'),
             'cheque_number': cheque_number,
-            'cheque_attachment': cheque_attachment,  # NEW
+            'cheque_attachment': cheque_attachment,
             'attachment': files['attachment'],
             'particulars': particulars
         }
 
-        # Pass files in context so serializer can access them
         serializer = VoucherSerializer(data=serializer_data, context={
             'request': request,
-            'files': files  # Optional: if needed in serializer
+            'files': files
         })
         if serializer.is_valid():
             voucher = serializer.save(created_by=request.user)
-            # SUCCESS RESPONSE WITH MESSAGE
             return Response({
                 'success': True,
                 'message': f'Voucher {voucher.voucher_number} created successfully!',
@@ -378,8 +415,16 @@ class VoucherApprovalAPI(AdminStaffRequiredMixin, APIView):
 
     def post(self, request, pk):
         status_choice = request.data.get('status')
+        rejection_reason = request.data.get('rejection_reason', '').strip()
+
         if status_choice not in ['APPROVED', 'REJECTED']:
             return Response({'status': ['Invalid choice.']}, status=status.HTTP_400_BAD_REQUEST)
+
+        if status_choice == 'REJECTED' and not rejection_reason:
+            return Response(
+                {'rejection_reason': 'Reason is required when rejecting.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         max_retries = 3
         for attempt in range(max_retries):
@@ -387,14 +432,12 @@ class VoucherApprovalAPI(AdminStaffRequiredMixin, APIView):
                 with transaction.atomic():
                     voucher = Voucher.objects.select_for_update(nowait=True).get(pk=pk)
 
-                    # Use voucher's required_approvers (snapshot or dynamic)
                     if request.user.username not in voucher.required_approvers:
                         return Response(
                             {'error': 'You are not authorized to approve this voucher.'},
                             status=status.HTTP_403_FORBIDDEN
                         )
 
-                    # === SEQUENTIAL APPROVAL: Only for PENDING ===
                     if voucher.status != 'PENDING':
                         return Response(
                             {'error': 'This voucher is no longer pending.'},
@@ -445,11 +488,13 @@ class VoucherApprovalAPI(AdminStaffRequiredMixin, APIView):
                             'waiting_for': waiting_for
                         }, status=status.HTTP_403_FORBIDDEN)
 
-                    # Save approval
                     approval, created = VoucherApproval.objects.update_or_create(
                         voucher=voucher,
                         approver=request.user,
-                        defaults={'status': status_choice}
+                        defaults={
+                            'status': status_choice,
+                            'rejection_reason': rejection_reason if status_choice == 'REJECTED' else None
+                        }
                     )
 
                     voucher.refresh_from_db()
@@ -459,7 +504,8 @@ class VoucherApprovalAPI(AdminStaffRequiredMixin, APIView):
                 response_data = serializer.data
                 response_data['approval'] = {
                     'approver': request.user.username,
-                    'approved_at': approval.approved_at.strftime('%d %b %H:%M')
+                    'approved_at': approval.approved_at.strftime('%d %b %H:%M'),
+                    'rejection_reason': approval.rejection_reason
                 }
                 response_data['can_approve'] = True
                 return Response(response_data, status=status.HTTP_200_OK)
@@ -564,6 +610,7 @@ class UserCreateAPI(APIView):
         password = request.data.get('password', '')
         user_group = request.data.get('user_group', '')
         designation_id = request.data.get('designation')
+        signature = request.FILES.get('signature')  # NEW: Accept signature file
 
         if not username or not password or not user_group:
             return Response({'error': 'Username, password, and group are required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -580,9 +627,14 @@ class UserCreateAPI(APIView):
             user = User.objects.create(username=username, password=make_password(password))
             group = Group.objects.get(name=user_group)
             user.groups.add(group)
+
+            profile = UserProfile.objects.create(user=user)
             if user_group == 'Admin Staff':
                 designation = Designation.objects.get(id=designation_id)
-                UserProfile.objects.create(user=user, designation=designation)
+                profile.designation = designation
+            if signature:
+                profile.signature = signature
+            profile.save()
 
             return Response({
                 'message': f'User "{username}" created successfully.',
@@ -613,7 +665,7 @@ class VoucherDeleteAPI(APIView):
         }, status=status.HTTP_200_OK)
 
 
-# === NEW: USER UPDATE API (for User Control) ===
+# === UPDATED: USER UPDATE API (Supports Username Edit + Signature Update) ===
 class UserUpdateAPI(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -622,13 +674,13 @@ class UserUpdateAPI(APIView):
             return Response({'error': 'Superuser only'}, status=status.HTTP_403_FORBIDDEN)
 
         user_id = request.data.get('user_id')
-        first_name = request.data.get('first_name', '').strip()
-        last_name = request.data.get('last_name', '').strip()
+        username = request.data.get('username', '').strip()
         group_name = request.data.get('user_group')
         designation_id = request.data.get('designation')
         is_active = request.data.get('is_active') in [True, 'true', 'True']
+        signature = request.FILES.get('signature')  # NEW: Allow signature update
 
-        if not user_id or not group_name:
+        if not user_id or not group_name or not username:
             return Response({'error': 'Missing required fields'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
@@ -636,13 +688,13 @@ class UserUpdateAPI(APIView):
         except User.DoesNotExist:
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        # Update basic info
-        user.first_name = first_name
-        user.last_name = last_name
+        if username != user.username and User.objects.filter(username=username).exists():
+            return Response({'error': 'Username already taken'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.username = username
         user.is_active = is_active
         user.save()
 
-        # Update group
         user.groups.clear()
         try:
             group = Group.objects.get(name=group_name)
@@ -650,18 +702,21 @@ class UserUpdateAPI(APIView):
         except Group.DoesNotExist:
             return Response({'error': 'Invalid group'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Update designation (Admin Staff only)
+        profile, _ = UserProfile.objects.get_or_create(user=user)
         if group_name == 'Admin Staff':
             if not designation_id:
                 return Response({'error': 'Designation required for Admin Staff'}, status=status.HTTP_400_BAD_REQUEST)
             try:
                 designation = Designation.objects.get(id=designation_id)
-                profile, _ = UserProfile.objects.get_or_create(user=user)
                 profile.designation = designation
-                profile.save()
             except Designation.DoesNotExist:
                 return Response({'error': 'Invalid designation'}, status=status.HTTP_400_BAD_REQUEST)
         else:
-            UserProfile.objects.filter(user=user).delete()
+            profile.designation = None
+
+        if signature:
+            profile.signature = signature
+
+        profile.save()
 
         return Response({'message': 'User updated successfully'}, status=status.HTTP_200_OK)

@@ -15,3 +15,11 @@ def filename(value):
     Usage: {{ file_field.name|filename }} → "image.jpg"
     """
     return os.path.basename(str(value))
+
+@register.filter
+def first_rejected(approvals):
+    """
+    Returns the first REJECTED approval from a queryset, or None.
+    Usage: {% first_rejected voucher.approvals as reject %}
+    """
+    return approvals.filter(status='REJECTED').first()

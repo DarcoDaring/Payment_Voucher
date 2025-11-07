@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load voucher_tags %}
-{% load voucher_extras %}
+{% load voucher_extras %} {# <-- Ensure this is loaded #}
 
 {% block content %}
 <div class="container mt-4">
@@ -164,7 +164,9 @@
                         Required: {{ voucher.required_approvers|join:", " }}
                     </small>
                 </div>
-
+                <div class="text-muted small">
+                                Waiting for <strong>{{ waiting_for_username }}</strong>
+                            </div>
                 <!-- 7. ACTION BUTTONS -->
                 <div class="d-grid d-md-flex gap-2 justify-content-center">
                     <a href="{% url 'voucher_list' %}" class="btn btn-secondary px-5">Back to List</a>
@@ -173,16 +175,15 @@
                         <button class="btn btn-warning px-5" data-bs-toggle="modal" data-bs-target="#editVoucherModal">
                             Edit
                         </button>
+                        
                     {% endif %}
-
+                        
                     {% if user.groups.all.0.name == 'Admin Staff' and voucher.status == 'PENDING' %}
                         {% if not user_approval and can_approve %}
                             <button class="btn btn-success px-5 approve-btn" data-id="{{ voucher.id }}" data-status="APPROVED">Approve</button>
                             <button class="btn btn-danger px-5 approve-btn" data-id="{{ voucher.id }}" data-status="REJECTED">Reject</button>
                         {% elif not can_approve %}
-                            <div class="text-muted small">
-                                Waiting for <strong>{{ waiting_for_designation }}</strong>
-                            </div>
+                            
                         {% endif %}
                     {% endif %}
 
@@ -278,6 +279,25 @@
                         </ul>
                     </div>
                 </div>
+
+                <!-- REJECTION REASON BOX (SEPARATE) -->
+                {% if voucher.status == 'REJECTED' %}
+                    {% with reject=voucher.approvals|first_rejected %}
+                        {% if reject.rejection_reason %}
+                            <div class="mt-4 p-3 bg-light border rounded">
+                                <h6 class="text-danger mb-2">
+                                    Rejection Reason
+                                </h6>
+                                <p class="mb-0 text-danger fw-medium">
+                                    "{{ reject.rejection_reason }}"
+                                </p>
+                                <small class="text-muted">
+                                    by {{ reject.approver.username }} on {{ reject.approved_at|date:"d M Y, h:i A" }}
+                                </small>
+                            </div>
+                        {% endif %}
+                    {% endwith %}
+                {% endif %}
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -286,93 +306,139 @@
     </div>
 </div>
 
-<!-- PRINT SECTION (UNCHANGED) -->
-<div id="print-section" style="display: none;">
+<!-- ==================== PRINT-ONLY SECTION (FIXED – NO BLANK PAGE) ==================== -->
+<div id="print-section">
+    <style type="text/css">
+        @media print {
+            @page { margin: 0.5in; }
+            body * { visibility: hidden; }
+            #print-section, #print-section * { visibility: visible; }
+            #print-section { position: absolute; left: 0; top: 0; width: 100%; }
+            .signature-img { max-height: 40px; margin: 8px 0; }
+            .signature-block { text-align: center; width: 30%; min-width: 160px; }
+        }
+        /* Hide on screen */
+        #print-section { display: none; }
+        @media screen { #print-section { display: none; } }
+    </style>
+
     <div style="padding: 40px; font-family: Arial, sans-serif; max-width: 800px; margin: auto;">
+        <!-- COMPANY HEADER -->
         <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 10px;">
-            <h2>VOUCHER</h2>
-            <p style="margin: 5px 0; font-size: 14px;"><strong>Your Company Name</strong></p>
-            <p style="margin: 5px 0; font-size: 12px;">Address Line 1, City, Country</p>
-            <p style="margin: 5px 0; font-size: 12px;">Phone: +123-456-7890 | Email: finance@company.com</p>
+            <h2>XYZ COMPANY PVT LTD</h2>
+            <p style="margin: 5px 0; font-size: 14px;">123 Business Street, City – 123456</p>
+            <p style="margin: 5px 0; font-size: 12px;">GST: 22AAAAA0000A1Z5 | PAN: AAAAA0000A</p>
         </div>
 
-        <table style="width: 100%; margin-bottom: 20px; font-size: 14px;">
-            <tr>
-                <td style="width: 50%;"><strong>Voucher No:</strong> {{ voucher.voucher_number }}</td>
-                <td style="text-align: right;"><strong>Date:</strong> {{ voucher.voucher_date }}</td>
-            </tr>
-            <tr>
-                <td><strong>Pay To:</strong> {{ voucher.name_title }} {{ voucher.pay_to }}</td>
-                <td style="text-align: right;">
-                    <strong>Payment Type:</strong> {{ voucher.get_payment_type_display }}
-                    {% if voucher.cheque_number %}| <strong>Cheque #:</strong> {{ voucher.cheque_number }}{% endif %}
-                </td>
-            </tr>
-        </table>
+        <hr class="border-dark">
 
+        <!-- VOUCHER TITLE -->
+        <div style="text-align: center; margin: 20px 0;">
+            <h4 class="fw-bold text-uppercase">Payment Voucher</h4>
+            <p style="margin: 5px 0; font-size: 14px;">
+                <strong>No:</strong> {{ voucher.voucher_number }} | 
+                <strong>Date:</strong> {{ voucher.voucher_date|date:"d M Y" }}
+            </p>
+        </div>
+
+        <!-- PAYEE & AMOUNT -->
+        <div style="display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 14px;">
+            <div>
+                <strong>Pay To:</strong> {{ voucher.name_title }} {{ voucher.pay_to }}
+            </div>
+            <div style="text-align: right;">
+                <strong>Amount:</strong> ₹{{ voucher.particulars.all|sum_particulars|floatformat:2 }}
+            </div>
+        </div>
+
+        <!-- PARTICULARS TABLE -->
         <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px;">
             <thead>
                 <tr style="background-color: #f8f9fa; border-bottom: 2px solid #000;">
-                    <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Description</th>
-                    <th style="padding: 10px; text-align: right; border: 1px solid #ddd; width: 120px;">Amount</th>
+                    <th style="padding: 10px; text-align: left; border: 1px solid #ddd; width: 5%;">#</th>
+                    <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Particulars</th>
+                    <th style="padding: 10px; text-align: right; border: 1px solid #ddd; width: 20%;">Amount (₹)</th>
                 </tr>
             </thead>
             <tbody>
                 {% for p in voucher.particulars.all %}
                 <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 8px; border: 1px solid #ddd;">{{ forloop.counter }}</td>
                     <td style="padding: 8px; border: 1px solid #ddd;">{{ p.description }}</td>
                     <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">{{ p.amount|floatformat:2 }}</td>
                 </tr>
                 {% endfor %}
                 <tr style="background-color: #e9ecef; font-weight: bold;">
-                    <td style="padding: 10px; text-align: right; border: 1px solid #ddd;">Total:</td>
+                    <td colspan="2" style="padding: 10px; text-align: right; border: 1px solid #ddd;">Total:</td>
                     <td style="padding: 10px; text-align: right; border: 1px solid #ddd;">
-                        {{ voucher.particulars.all|sum_particulars|floatformat:2 }}
+                        ₹{{ voucher.particulars.all|sum_particulars|floatformat:2 }}
                     </td>
                 </tr>
             </tbody>
         </table>
 
-        <div style="margin-top: 40px; display: flex; justify-content: space-between; font-size: 13px;">
-            <div style="text-align: center; width: 45%;">
-                <p style="border-top: 1px solid #000; padding-top: 5px; margin: 40px 0 5px;">
-                    Prepared By: {{ voucher.created_by.username }}
-                </p>
-            </div>
-            <div style="text-align: center; width: 45%;">
-                <p style="border-top: 1px solid #000; padding-top: 5px; margin: 40px 0 5px;">
-                    Approved By:
-                    {% for approval in voucher.approvals.all %}
-                        {% if approval.status == 'APPROVED' %}
-                            {{ approval.approver.username }}{% if not forloop.last %}, {% endif %}
+        <!-- APPROVAL SIGNATURES – SIGNATURE UNDER NAME -->
+        <div style="margin-top: 50px;">
+            <h6 style="font-weight: bold; margin-bottom: 20px;">Approval Signatures</h6>
+            <div style="display: flex; flex-wrap: wrap; gap: 20px; justify-content: space-around;">
+                {% for approval in voucher.approvals.all %}
+                    {% if approval.status == 'APPROVED' %}
+                    <div class="signature-block">
+                        <div style="font-size: 13px;">
+                            <strong>{{ approval.approver.get_full_name|default:approval.approver.username }}</strong><br>
+                            <small>{{ approval.approver.userprofile.designation.name }}</small><br>
+                            <small>Approved on {{ approval.approved_at|date:"d M Y H:i" }}</small>
+                        </div>
+                        {% if approval.approver.userprofile.signature %}
+                            <img src="{{ approval.approver.userprofile.signature.url }}" class="signature-img" alt="Signature">
+                        {% else %}
+                            <div style="height: 40px; display: flex; align-items: center; justify-content: center; font-style: italic; color: #999;">
+                                (No signature)
+                            </div>
                         {% endif %}
-                    {% endfor %}
-                </p>
+                    </div>
+                    {% endif %}
+                {% empty %}
+                    <p style="text-align: center; color: #999; width: 100%;">No approvals recorded.</p>
+                {% endfor %}
             </div>
         </div>
 
-        <div style="text-align: center; margin-top: 50px; font-size: 11px; color: #666;">
-            <p>Printed on: {{ "now"|date:"d M Y H:i" }} | This is a system-generated voucher.</p>
+        <!-- FOOTER -->
+        <div style="text-align: center; margin-top: 60px; font-size: 11px; color: #666;">
+            <hr style="border-top: 1px dashed #ccc;">
+            <p>Generated on {{ "now"|date:"d M Y H:i" }} | Voucher System</p>
         </div>
     </div>
-</div>
 
-<style>
-@media print {
-    body * { visibility: hidden; }
-    #print-section, #print-section * { visibility: visible; }
-    #print-section { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
-}
-</style>
+    <!-- PRE-LOAD SIGNATURE IMAGES (off-screen) -->
+    <div id="preload-signatures" style="position: absolute; left: -9999px; top: -9999px;">
+        {% for approval in voucher.approvals.all %}
+            {% if approval.status == 'APPROVED' and approval.approver.userprofile.signature %}
+                <img src="{{ approval.approver.userprofile.signature.url }}" onload="this.onload=null;">
+            {% endif %}
+        {% endfor %}
+    </div>
+</div>
+<!-- END PRINT-ONLY -->
+
+<script>
+/* Pre-load signatures so they appear in print */
+document.addEventListener('DOMContentLoaded', function () {
+    const preload = document.getElementById('preload-signatures');
+    if (preload) {
+        const imgs = preload.querySelectorAll('img');
+        imgs.forEach(img => {
+            if (!img.complete) img.onload = () => {};
+        });
+    }
+});
+</script>
 
 <script>
 function printVoucher() {
-    const printContent = document.getElementById('print-section').innerHTML;
-    const originalContent = document.body.innerHTML;
-    document.body.innerHTML = printContent;
+    // Use native print – no body replacement (prevents blank page)
     window.print();
-    document.body.innerHTML = originalContent;
-    location.reload();
 }
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -384,7 +450,21 @@ document.addEventListener('DOMContentLoaded', function () {
             const id = this.dataset.id;
             const status = this.dataset.status;
 
+            if (status === 'REJECTED') {
+                const reason = prompt('Please provide a reason for rejection:');
+                if (!reason || reason.trim() === '') {
+                    alert('Rejection reason is required.');
+                    return;
+                }
+                this.dataset.reason = reason.trim();
+            }
+
             document.querySelectorAll('.approve-btn').forEach(b => b.disabled = true);
+
+            const payload = { status };
+            if (status === 'REJECTED') {
+                payload.rejection_reason = this.dataset.reason;
+            }
 
             fetch(`/api/vouchers/${id}/approve/`, {
                 method: 'POST',
@@ -392,7 +472,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': csrf
                 },
-                body: JSON.stringify({ status })
+                body: JSON.stringify(payload)
             })
             .then(r => r.json())
             .then(data => {
@@ -449,4 +529,14 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 </script>
+
+<style>
+/* Ensure print section is visible only when printing */
+@media screen {
+    #print-section { display: none !important; }
+}
+@media print {
+    #print-section { display: block !important; }
+}
+</style>
 {% endblock %}
