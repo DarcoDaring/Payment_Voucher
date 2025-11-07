@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load voucher_tags %}
-{% load voucher_extras %} {# <-- Ensure this is loaded #}
+{% load voucher_extras %}
 
 {% block content %}
 <div class="container mt-4">
@@ -165,8 +165,9 @@
                     </small>
                 </div>
                 <div class="text-muted small">
-                                Waiting for <strong>{{ waiting_for_username }}</strong>
-                            </div>
+                    Waiting for <strong>{{ waiting_for_username }}</strong>
+                </div>
+
                 <!-- 7. ACTION BUTTONS -->
                 <div class="d-grid d-md-flex gap-2 justify-content-center">
                     <a href="{% url 'voucher_list' %}" class="btn btn-secondary px-5">Back to List</a>
@@ -175,7 +176,6 @@
                         <button class="btn btn-warning px-5" data-bs-toggle="modal" data-bs-target="#editVoucherModal">
                             Edit
                         </button>
-                        
                     {% endif %}
                         
                     {% if user.groups.all.0.name == 'Admin Staff' and voucher.status == 'PENDING' %}
@@ -183,7 +183,6 @@
                             <button class="btn btn-success px-5 approve-btn" data-id="{{ voucher.id }}" data-status="APPROVED">Approve</button>
                             <button class="btn btn-danger px-5 approve-btn" data-id="{{ voucher.id }}" data-status="REJECTED">Reject</button>
                         {% elif not can_approve %}
-                            
                         {% endif %}
                     {% endif %}
 
@@ -285,12 +284,8 @@
                     {% with reject=voucher.approvals|first_rejected %}
                         {% if reject.rejection_reason %}
                             <div class="mt-4 p-3 bg-light border rounded">
-                                <h6 class="text-danger mb-2">
-                                    Rejection Reason
-                                </h6>
-                                <p class="mb-0 text-danger fw-medium">
-                                    "{{ reject.rejection_reason }}"
-                                </p>
+                                <h6 class="text-danger mb-2">Rejection Reason</h6>
+                                <p class="mb-0 text-danger fw-medium">"{{ reject.rejection_reason }}"</p>
                                 <small class="text-muted">
                                     by {{ reject.approver.username }} on {{ reject.approved_at|date:"d M Y, h:i A" }}
                                 </small>
@@ -317,7 +312,6 @@
             .signature-img { max-height: 40px; margin: 8px 0; }
             .signature-block { text-align: center; width: 30%; min-width: 160px; }
         }
-        /* Hide on screen */
         #print-section { display: none; }
         @media screen { #print-section { display: none; } }
     </style>
@@ -377,9 +371,8 @@
             </tbody>
         </table>
 
-        <!-- APPROVAL SIGNATURES – SIGNATURE UNDER NAME -->
+        <!-- APPROVAL SIGNATURES -->
         <div style="margin-top: 50px;">
-            <h6 style="font-weight: bold; margin-bottom: 20px;">Approval Signatures</h6>
             <div style="display: flex; flex-wrap: wrap; gap: 20px; justify-content: space-around;">
                 {% for approval in voucher.approvals.all %}
                     {% if approval.status == 'APPROVED' %}
@@ -411,7 +404,7 @@
         </div>
     </div>
 
-    <!-- PRE-LOAD SIGNATURE IMAGES (off-screen) -->
+    <!-- PRE-LOAD SIGNATURE IMAGES -->
     <div id="preload-signatures" style="position: absolute; left: -9999px; top: -9999px;">
         {% for approval in voucher.approvals.all %}
             {% if approval.status == 'APPROVED' and approval.approver.userprofile.signature %}
@@ -420,10 +413,9 @@
         {% endfor %}
     </div>
 </div>
-<!-- END PRINT-ONLY -->
 
 <script>
-/* Pre-load signatures so they appear in print */
+/* Pre-load signatures */
 document.addEventListener('DOMContentLoaded', function () {
     const preload = document.getElementById('preload-signatures');
     if (preload) {
@@ -437,33 +429,37 @@ document.addEventListener('DOMContentLoaded', function () {
 
 <script>
 function printVoucher() {
-    // Use native print – no body replacement (prevents blank page)
     window.print();
 }
+
+/* === GET VOUCHER LIST URL SAFELY === */
+{% url 'voucher_list' as voucher_list_url %}
 
 document.addEventListener('DOMContentLoaded', function () {
     const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
 
-    // === APPROVE/REJECT ===
+    // === APPROVE/REJECT – FIXED REDIRECT ===
     document.querySelectorAll('.approve-btn').forEach(btn => {
         btn.addEventListener('click', function () {
             const id = this.dataset.id;
             const status = this.dataset.status;
 
+            let reason = null;
             if (status === 'REJECTED') {
-                const reason = prompt('Please provide a reason for rejection:');
+                reason = prompt('Please provide a reason for rejection:');
                 if (!reason || reason.trim() === '') {
                     alert('Rejection reason is required.');
                     return;
                 }
-                this.dataset.reason = reason.trim();
+                reason = reason.trim();
             }
 
+            // Disable buttons
             document.querySelectorAll('.approve-btn').forEach(b => b.disabled = true);
 
             const payload = { status };
             if (status === 'REJECTED') {
-                payload.rejection_reason = this.dataset.reason;
+                payload.rejection_reason = reason;  // Correct variable
             }
 
             fetch(`/api/vouchers/${id}/approve/`, {
@@ -474,22 +470,26 @@ document.addEventListener('DOMContentLoaded', function () {
                 },
                 body: JSON.stringify(payload)
             })
-            .then(r => r.json())
+            .then(r => {
+                if (!r.ok) throw new Error('Server error: ' + r.status);
+                return r.json();
+            })
             .then(data => {
-                if (data.status === 'APPROVED') {
-                    setTimeout(() => location.reload(), 1000);
+                if (data.status === 'APPROVED' || data.status === 'REJECTED') {
+                    window.location.href = voucher_list_url;  // Safe redirect
                 } else {
-                    alert(data.message || 'Action recorded.');
+                    throw new Error(data.message || 'Unknown response');
                 }
             })
-            .catch(() => {
-                alert('Failed. Try again.');
+            .catch(err => {
+                console.error('Approval failed:', err);
+                alert('Action failed: ' + (err.message || 'Try again.'));
                 document.querySelectorAll('.approve-btn').forEach(b => b.disabled = false);
             });
         });
     });
 
-    // === FIXED ATTACHMENT PREVIEW – PDFs WORK PERFECTLY ===
+    // === ATTACHMENT PREVIEW (UNCHANGED) ===
     const iframe = document.getElementById('attachmentIframe');
     const imagePreview = document.getElementById('imagePreview');
     const previewImage = document.getElementById('previewImage');
@@ -531,12 +531,8 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 
 <style>
-/* Ensure print section is visible only when printing */
-@media screen {
-    #print-section { display: none !important; }
-}
-@media print {
-    #print-section { display: block !important; }
-}
+@media screen { #print-section { display: none !important; } }
+@media print { #print-section { display: block !important; } }
 </style>
+
 {% endblock %}
