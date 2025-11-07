@@ -43,6 +43,14 @@ class Voucher(models.Model):
         help_text="Required only for Cheque payments"
     )
 
+    # NEW: CHEQUE ATTACHMENT
+    cheque_attachment = models.FileField(
+        upload_to='vouchers/cheques/',
+        null=True,
+        blank=True,
+        help_text="Required only for Cheque payments"
+    )
+
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='vouchers')
     created_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(
@@ -167,6 +175,3 @@ class ApprovalLevel(models.Model):
 
     def __str__(self):
         return f"{self.order}. {self.designation.name} ({'Active' if self.is_active else 'Inactive'})"
-    
-
-

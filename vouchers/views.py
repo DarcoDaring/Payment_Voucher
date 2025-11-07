@@ -55,6 +55,11 @@ class HomeView(TemplateView):
         context['is_admin_staff'] = user.is_authenticated and (user.groups.filter(name='Admin Staff').exists() or user.is_superuser)
         context['is_superuser'] = user.is_superuser
         context['designations'] = Designation.objects.all()
+
+        # NEW: Pass all users for User Control (only for superuser)
+        if user.is_superuser:
+            context['all_users'] = User.objects.select_related('userprofile__designation').all()
+
         return context
 
 
@@ -338,6 +343,7 @@ class VoucherCreateAPI(AccountantRequiredMixin, APIView):
             )
 
         cheque_number = data.get('cheque_number', '').strip() if data.get('payment_type') == 'CHEQUE' else None
+        cheque_attachment = files.get('cheque_attachment') if data.get('payment_type') == 'CHEQUE' else None  # NEW
 
         serializer_data = {
             'voucher_date': data.get('voucher_date'),
@@ -345,11 +351,16 @@ class VoucherCreateAPI(AccountantRequiredMixin, APIView):
             'name_title': data.get('name_title'),
             'pay_to': data.get('pay_to'),
             'cheque_number': cheque_number,
+            'cheque_attachment': cheque_attachment,  # NEW
             'attachment': files['attachment'],
             'particulars': particulars
         }
 
-        serializer = VoucherSerializer(data=serializer_data, context={'request': request})
+        # Pass files in context so serializer can access them
+        serializer = VoucherSerializer(data=serializer_data, context={
+            'request': request,
+            'files': files  # Optional: if needed in serializer
+        })
         if serializer.is_valid():
             voucher = serializer.save(created_by=request.user)
             # SUCCESS RESPONSE WITH MESSAGE
@@ -600,3 +611,57 @@ class VoucherDeleteAPI(APIView):
         return Response({
             'message': f'Voucher {voucher_number} deleted successfully.'
         }, status=status.HTTP_200_OK)
+
+
+# === NEW: USER UPDATE API (for User Control) ===
+class UserUpdateAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not request.user.is_superuser:
+            return Response({'error': 'Superuser only'}, status=status.HTTP_403_FORBIDDEN)
+
+        user_id = request.data.get('user_id')
+        first_name = request.data.get('first_name', '').strip()
+        last_name = request.data.get('last_name', '').strip()
+        group_name = request.data.get('user_group')
+        designation_id = request.data.get('designation')
+        is_active = request.data.get('is_active') in [True, 'true', 'True']
+
+        if not user_id or not group_name:
+            return Response({'error': 'Missing required fields'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Update basic info
+        user.first_name = first_name
+        user.last_name = last_name
+        user.is_active = is_active
+        user.save()
+
+        # Update group
+        user.groups.clear()
+        try:
+            group = Group.objects.get(name=group_name)
+            user.groups.add(group)
+        except Group.DoesNotExist:
+            return Response({'error': 'Invalid group'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Update designation (Admin Staff only)
+        if group_name == 'Admin Staff':
+            if not designation_id:
+                return Response({'error': 'Designation required for Admin Staff'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                designation = Designation.objects.get(id=designation_id)
+                profile, _ = UserProfile.objects.get_or_create(user=user)
+                profile.designation = designation
+                profile.save()
+            except Designation.DoesNotExist:
+                return Response({'error': 'Invalid designation'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            UserProfile.objects.filter(user=user).delete()
+
+        return Response({'message': 'User updated successfully'}, status=status.HTTP_200_OK)

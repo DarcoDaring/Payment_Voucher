@@ -220,6 +220,124 @@
     </div>
     {% endif %}
 
+    <!-- USER CONTROL MODAL (SUPERUSER ONLY) -->
+    {% if user.is_superuser %}
+    <div class="modal fade" id="userControlModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">User Control Panel</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle" id="userControlTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Username</th>
+                                    <th>Full Name</th>
+                                    <th>Group</th>
+                                    <th>Designation</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for u in all_users %}
+                                <tr data-user-id="{{ u.id }}">
+                                    <td>{{ u.username }}</td>
+                                    <td>{{ u.get_full_name|default:"—" }}</td>
+                                    <td>{{ u.groups.all.0.name|default:"—" }}</td>
+                                    <td>{{ u.userprofile.designation.name|default:"—" }}</td>
+                                    <td>
+                                        <span class="badge bg-{{ u.is_active|yesno:'success,danger' }}">
+                                            {{ u.is_active|yesno:'Active,Disabled' }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary edit-user-btn"
+                                                data-id="{{ u.id }}"
+                                                data-username="{{ u.username }}"
+                                                data-first-name="{{ u.first_name }}"
+                                                data-last-name="{{ u.last_name }}"
+                                                data-group="{{ u.groups.all.0.name|default:'' }}"
+                                                data-designation="{{ u.userprofile.designation.id|default:'' }}"
+                                                data-active="{{ u.is_active|yesno:'true,false' }}">
+                                            Edit
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="6" class="text-center text-muted">No users found.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- EDIT USER MODAL (inside User Control) -->
+    <div class="modal fade" id="editUserModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form id="editUserForm">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Edit User</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" id="edit_user_id">
+                        <div class="mb-3">
+                            <label class="form-label">Username</label>
+                            <input type="text" class="form-control" id="edit_username" disabled>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">First Name</label>
+                            <input type="text" class="form-control" id="edit_first_name" maxlength="150">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Last Name</label>
+                            <input type="text" class="form-control" id="edit_last_name" maxlength="150">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Group</label>
+                            <select class="form-select" id="edit_user_group" required>
+                                <option value="Accountants">Accountants</option>
+                                <option value="Admin Staff">Admin Staff</option>
+                            </select>
+                        </div>
+                        <div class="mb-3" id="edit_designation_field" style="display:none;">
+                            <label class="form-label">Designation</label>
+                            <select class="form-select" id="edit_user_designation">
+                                <option value="">-- Select Designation --</option>
+                                {% for des in designations %}
+                                <option value="{{ des.id }}">{{ des.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Status</label>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="edit_user_active">
+                                <label class="form-check-label" for="edit_user_active">Active</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- CREATE VOUCHER MODAL - NEW COMPACT DESIGN -->
     {% if user.is_authenticated and user.groups.all.0.name == 'Accountants' %}
     <div class="modal fade" id="createVoucherModal" tabindex="-1">
@@ -242,21 +360,21 @@
                             </div>
                         </div>
 
-                                            <!-- 2. Title (SUPER SMALL) + Pay To (Full) -->
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-2">
-                            <label for="name_title" class="form-label">Title <span class="text-danger">*</span></label>
-                            <select class="form-select form-select-sm" id="name_title" name="name_title" required>
-                                <option value="MR">Mr.</option>
-                                <option value="MRS">Mrs.</option>
-                                <option value="MS">Ms.</option>
-                            </select>
-                        </div>
-                        <div class="col-md-10">
-                            <label for="pay_to" class="form-label">Pay To <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="pay_to" name="pay_to" required placeholder="Enter full name">
-                        </div>
-                    </div>  
+                        <!-- 2. Title (SUPER SMALL) + Pay To (Full) -->
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-2">
+                                <label for="name_title" class="form-label">Title <span class="text-danger">*</span></label>
+                                <select class="form-select form-select-sm" id="name_title" name="name_title" required>
+                                    <option value="MR">Mr.</option>
+                                    <option value="MRS">Mrs.</option>
+                                    <option value="MS">Ms.</option>
+                                </select>
+                            </div>
+                            <div class="col-md-10">
+                                <label for="pay_to" class="form-label">Pay To <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="pay_to" name="pay_to" required placeholder="Enter full name">
+                            </div>
+                        </div>  
 
                         <!-- 3. Payment Type -->
                         <div class="mb-3" style="max-width: 300px;">
@@ -272,6 +390,13 @@
                         <div class="mb-3" id="chequeNumberField" style="display:none; max-width: 300px;">
                             <label for="cheque_number" class="form-label">Cheque Number <span class="text-danger">*</span></label>
                             <input type="text" class="form-control form-control-sm" id="cheque_number" name="cheque_number" placeholder="e.g. 123456" maxlength="20">
+                        </div>
+
+                        <!-- 4.5. CHEQUE ATTACHMENT (NEW) -->
+                        <div class="mb-3" id="chequeAttachmentField" style="display:none; max-width: 500px;">
+                            <label for="cheque_attachment" class="form-label">Cheque Attachment <span class="text-danger">*</span></label>
+                            <input type="file" class="form-control form-control-sm" id="cheque_attachment" name="cheque_attachment">
+                            <div class="mt-1 text-muted file-name small" id="chequeFileName"></div>
                         </div>
 
                         <!-- 5. Main Attachment -->
@@ -513,15 +638,23 @@
             const paymentTypeSelect = document.getElementById('payment_type');
             const chequeField = document.getElementById('chequeNumberField');
             const chequeInput = document.getElementById('cheque_number');
+            const chequeAttachmentField = document.getElementById('chequeAttachmentField'); // NEW
+            const chequeAttachmentInput = document.getElementById('cheque_attachment'); // NEW
 
             const toggleCheque = () => {
                 if (paymentTypeSelect.value === 'CHEQUE') {
                     chequeField.style.display = 'block';
                     chequeInput.required = true;
+                    chequeAttachmentField.style.display = 'block'; // NEW
+                    chequeAttachmentInput.required = true; // NEW
                 } else {
                     chequeField.style.display = 'none';
                     chequeInput.required = false;
                     chequeInput.value = '';
+                    chequeAttachmentField.style.display = 'none'; // NEW
+                    chequeAttachmentInput.required = false; // NEW
+                    chequeAttachmentInput.value = ''; // NEW
+                    document.getElementById('chequeFileName').textContent = ''; // NEW
                 }
             };
             paymentTypeSelect.addEventListener('change', toggleCheque);
@@ -529,6 +662,11 @@
 
             document.getElementById('attachment').addEventListener('change', e => {
                 document.getElementById('fileName').textContent = e.target.files[0]?.name ? `Selected: ${e.target.files[0].name}` : '';
+            });
+
+            // NEW: Show filename for cheque attachment
+            chequeAttachmentInput.addEventListener('change', e => {
+                document.getElementById('chequeFileName').textContent = e.target.files[0]?.name ? `Selected: ${e.target.files[0].name}` : '';
             });
 
             addBtn.onclick = () => {
@@ -565,10 +703,15 @@
                 formData.append('name_title', nameTitle);
                 formData.append('pay_to', payTo);
                 formData.append('attachment', attachment);
+
                 if (paymentType === 'CHEQUE') {
                     const cn = chequeInput.value.trim();
                     if (!cn) return alert('Cheque number required');
                     formData.append('cheque_number', cn);
+
+                    const chequeFile = chequeAttachmentInput.files[0]; // NEW
+                    if (!chequeFile) return alert('Cheque attachment is required'); // NEW
+                    formData.append('cheque_attachment', chequeFile); // NEW
                 }
 
                 let valid = true;
@@ -600,6 +743,7 @@
                     bootstrap.Modal.getInstance(voucherModal).hide();
                     form.reset();
                     document.getElementById('fileName').textContent = '';
+                    document.getElementById('chequeFileName').textContent = ''; // NEW
                     tbody.innerHTML = `<tr>
                         <td><input type="text" class="form-control form-control-sm" name="particulars[0][description]" required></td>
                         <td><input type="number" step="0.01" class="form-control form-control-sm" name="particulars[0][amount]" required></td>
@@ -611,6 +755,80 @@
                 })
                 .catch(err => alert('Failed: ' + (err.error || JSON.stringify(err))));
             };
+        }
+
+        // === USER CONTROL & EDIT (NEW) ===
+        const userControlModal = document.getElementById('userControlModal');
+        if (userControlModal) {
+            userControlModal.addEventListener('show.bs.modal', () => {
+                // Optional: refresh users
+            });
+        }
+
+        document.querySelectorAll('.edit-user-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const modal = document.getElementById('editUserModal');
+                modal.querySelector('#edit_user_id').value = this.dataset.id;
+                modal.querySelector('#edit_username').value = this.dataset.username;
+                modal.querySelector('#edit_first_name').value = this.dataset.firstName;
+                modal.querySelector('#edit_last_name').value = this.dataset.lastName;
+                modal.querySelector('#edit_user_group').value = this.dataset.group;
+                modal.querySelector('#edit_user_active').checked = this.dataset.active === 'true';
+
+                const desField = modal.querySelector('#edit_designation_field');
+                const desSelect = modal.querySelector('#edit_user_designation');
+                if (this.dataset.group === 'Admin Staff') {
+                    desField.style.display = 'block';
+                    desSelect.required = true;
+                    desSelect.value = this.dataset.designation;
+                } else {
+                    desField.style.display = 'none';
+                    desSelect.required = false;
+                    desSelect.value = '';
+                }
+
+                new bootstrap.Modal(modal).show();
+            });
+        });
+
+        const editForm = document.getElementById('editUserForm');
+        if (editForm) {
+            editForm.addEventListener('submit', function (e) {
+                e.preventDefault();
+                const userId = this.querySelector('#edit_user_id').value;
+                const group = this.querySelector('#edit_user_group').value;
+                const designation = group === 'Admin Staff' ? this.querySelector('#edit_user_designation').value : null;
+
+                if (group === 'Admin Staff' && !designation) {
+                    return alert('Please select a designation for Admin Staff.');
+                }
+
+                fetch("{% url 'user_update_api' %}", {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCsrfToken(),
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        user_id: userId,
+                        first_name: this.querySelector('#edit_first_name').value,
+                        last_name: this.querySelector('#edit_last_name').value,
+                        user_group: group,
+                        designation: designation,
+                        is_active: this.querySelector('#edit_user_active').checked
+                    })
+                })
+                .then(r => r.json())
+                .then(d => {
+                    if (d.message) {
+                        alert(d.message);
+                        bootstrap.Modal.getInstance(document.getElementById('editUserModal')).hide();
+                        location.reload();
+                    } else {
+                        alert('Error: ' + (d.error || 'Failed'));
+                    }
+                });
+            });
         }
 
         // === APPROVE/REJECT, FILTER, SEARCH (unchanged) ===

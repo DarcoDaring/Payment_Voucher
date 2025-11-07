@@ -64,6 +64,15 @@ class VoucherSerializer(serializers.ModelSerializer):
         allow_blank=True,
         allow_null=True
     )
+
+    # NEW: CHEQUE ATTACHMENT
+    cheque_attachment = serializers.FileField(
+        required=False,
+        allow_null=True,
+        validators=[
+            FileExtensionValidator(allowed_extensions=['pdf', 'jpg', 'jpeg', 'png'])
+        ]
+    )
     
     approvals = VoucherApprovalSerializer(many=True, read_only=True)
     required_approvers = serializers.SerializerMethodField()
@@ -74,7 +83,7 @@ class VoucherSerializer(serializers.ModelSerializer):
         model = Voucher
         fields = [
             'id', 'voucher_number', 'voucher_date', 'payment_type', 'name_title', 'pay_to',
-            'cheque_number',
+            'cheque_number', 'cheque_attachment',
             'attachment', 'created_by', 'created_at', 'status',
             'particulars', 'approvals', 'required_approvers',
             'approved_count', 'rejected_count'
@@ -106,7 +115,7 @@ class VoucherSerializer(serializers.ModelSerializer):
         if not data.get('attachment'):
             raise serializers.ValidationError({'attachment': 'This field is required.'})
 
-        # === CHEQUE NUMBER VALIDATION ===
+        # === CHEQUE NUMBER & ATTACHMENT VALIDATION ===
         if data.get('payment_type') == 'CHEQUE':
             cheque_num = data.get('cheque_number', '').strip()
             if not cheque_num:
@@ -114,8 +123,15 @@ class VoucherSerializer(serializers.ModelSerializer):
             if not cheque_num.isdigit():
                 raise serializers.ValidationError({'cheque_number': 'Cheque number must contain only digits.'})
             data['cheque_number'] = cheque_num
+
+            cheque_file = data.get('cheque_attachment')
+            if not cheque_file:
+                raise serializers.ValidationError({'cheque_attachment': 'Cheque attachment is required for Cheque payments.'})
+            if cheque_file.size > 5 * 1024 * 1024:
+                raise serializers.ValidationError({'cheque_attachment': 'Cheque attachment size cannot exceed 5 MB.'})
         else:
             data['cheque_number'] = None
+            data['cheque_attachment'] = None
 
         return data
 
@@ -130,6 +146,7 @@ class VoucherSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         particulars_data = validated_data.pop('particulars', [])
         attachment = validated_data.pop('attachment', None)
+        cheque_attachment = validated_data.pop('cheque_attachment', None)  # NEW
         
         # created_by comes from view context
         created_by = validated_data.pop('created_by', None)
@@ -137,11 +154,14 @@ class VoucherSerializer(serializers.ModelSerializer):
             validated_data['created_by'] = created_by
 
         # Create voucher → triggers save() → saves snapshot
-        voucher = Voucher.objects.create(attachment=attachment, **validated_data)
+        voucher = Voucher.objects.create(
+            attachment=attachment,
+            cheque_attachment=cheque_attachment,  # NEW
+            **validated_data
+        )
 
         for p_data in particulars_data:
             p_attachment = p_data.pop('attachment', None)
             Particular.objects.create(voucher=voucher, attachment=p_attachment, **p_data)
 
         return voucher
-    

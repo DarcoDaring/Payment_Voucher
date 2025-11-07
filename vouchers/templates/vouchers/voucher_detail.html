@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load voucher_tags %}
+{% load voucher_extras %}
 
 {% block content %}
 <div class="container mt-4">
@@ -8,27 +9,57 @@
     <div class="mx-auto" style="max-width: 800px;">
         <div class="card shadow-sm border-0 rounded-4">
 
-            <!-- HEADER -->
+            <!-- HEADER (CHEQUE NUMBER REMOVED FROM HERE) -->
             <div class="card-header bg-primary text-white py-3">
                 <div class="d-flex justify-content-between align-items-center">
                     <h5 class="mb-0 fw-bold">Voucher {{ voucher.voucher_number }}</h5>
                     <div class="text-end">
-                        <span class="badge bg-light text-primary fs-6 px-3 py-2">
-                            {{ voucher.get_payment_type_display }}
-                        </span>
-                        {% if voucher.cheque_number %}
-                            <small class="d-block text-white mt-1">Cheque No: {{ voucher.cheque_number }}</small>
-                        {% endif %}
+                        <!-- Cheque number removed from header -->
                     </div>
                 </div>
             </div>
 
             <div class="card-body p-4">
 
-                <!-- 1. DATE (Left) -->
+                <!-- 1. DATE + TYPE + CHEQUE NUMBER + CHEQUE BUTTON -->
                 <div class="mb-4 pb-2 border-bottom">
-                    <strong class="text-muted small d-block">Voucher Date</strong>
-                    <p class="mb-0 fs-4 fw-bold text-dark">{{ voucher.voucher_date|date:"d M Y" }}</p>
+                    <div class="d-flex justify-content-between align-items-end">
+                        <!-- LEFT: Voucher Date (Big & Bold) -->
+                        <div>
+                            <strong class="text-muted small d-block">Voucher Date</strong>
+                            <p class="mb-0 fs-4 fw-bold text-dark">{{ voucher.voucher_date|date:"d M Y" }}</p>
+                        </div>
+
+                        <!-- RIGHT: Type + Cheque Number + View Button -->
+                        <div class="text-end">
+                            <div class="mb-2">
+                                <span class="text-muted">
+                                    <strong class="text-dark">Type:</strong> 
+                                    {% if voucher.payment_type == 'CASH' %}Cash
+                                    {% elif voucher.payment_type == 'CHEQUE' %}Cheque
+                                    {% elif voucher.payment_type == 'PETTY_CASH' %}Petty Cash
+                                    {% endif %}
+                                </span>
+                                <!-- CHEQUE NUMBER ADDED HERE -->
+                                {% if voucher.cheque_number %}
+                                    <span class="ms-3 text-white bg-dark px-2 py-1 rounded small">
+                                        <strong>Cheque No:</strong> {{ voucher.cheque_number }}
+                                    </span>
+                                {% endif %}
+                            </div>
+
+                            <!-- CHEQUE ATTACHMENT: VIEW BUTTON -->
+                            {% if voucher.payment_type == 'CHEQUE' and voucher.cheque_attachment %}
+                                <button type="button" class="btn btn-sm btn-outline-primary view-attachment-btn mt-2"
+                                        data-url="{{ voucher.cheque_attachment.url }}"
+                                        data-filename="Cheque_{{ voucher.voucher_number }}_{{ voucher.cheque_attachment.name|cut:'vouchers/cheques/'|filename }}">
+                                    View Cheque
+                                </button>
+                            {% elif voucher.payment_type == 'CHEQUE' and not voucher.cheque_attachment %}
+                                <small class="text-warning d-block mt-2">Cheque attachment missing</small>
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
 
                 <!-- 2. PAY TO -->
@@ -155,7 +186,7 @@
                         {% endif %}
                     {% endif %}
 
-                    <!-- PRINT BUTTON – PRINTS ONLY #print-section -->
+                    <!-- PRINT BUTTON -->
                     {% if voucher.status == 'APPROVED' %}
                         <button type="button" onclick="printVoucher()" class="btn btn-info px-5">
                             Print Voucher
@@ -176,15 +207,10 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-0" style="min-height: 60vh; position: relative;">
-                <!-- PDF / DOC Viewer -->
                 <iframe id="attachmentIframe" class="w-100 h-100 d-none" style="border:none;" frameborder="0"></iframe>
-                
-                <!-- Image Preview -->
                 <div id="imagePreview" class="d-none w-100 h-100 d-flex align-items-center justify-content-center bg-light">
                     <img id="previewImage" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="Preview">
                 </div>
-                
-                <!-- Fallback -->
                 <div id="fallbackMessage" class="d-none w-100 h-100 d-flex flex-column align-items-center justify-content-center p-4 text-center text-muted">
                     <p class="mb-3">Preview not available for this file type.</p>
                     <a id="downloadLink" href="#" target="_blank" class="btn btn-secondary">Download File</a>
@@ -197,7 +223,7 @@
     </div>
 </div>
 
-<!-- APPROVAL MODAL (Your Original – 100% Working) -->
+<!-- APPROVAL MODAL -->
 <div class="modal fade" id="approvalModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -260,7 +286,7 @@
     </div>
 </div>
 
-<!-- YOUR ORIGINAL PRINT SECTION – UNTOUCHED & PERFECT -->
+<!-- PRINT SECTION (UNCHANGED) -->
 <div id="print-section" style="display: none;">
     <div style="padding: 40px; font-family: Arial, sans-serif; max-width: 800px; margin: auto;">
         <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 10px;">
@@ -331,7 +357,6 @@
     </div>
 </div>
 
-<!-- PRINT STYLES -->
 <style>
 @media print {
     body * { visibility: hidden; }
@@ -340,7 +365,6 @@
 }
 </style>
 
-<!-- JS: PRINT + APPROVE + ATTACHMENT PREVIEW -->
 <script>
 function printVoucher() {
     const printContent = document.getElementById('print-section').innerHTML;
@@ -385,7 +409,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    // === ATTACHMENT PREVIEW MODAL ===
+    // === FIXED ATTACHMENT PREVIEW – PDFs WORK PERFECTLY ===
     const iframe = document.getElementById('attachmentIframe');
     const imagePreview = document.getElementById('imagePreview');
     const previewImage = document.getElementById('previewImage');
@@ -401,20 +425,22 @@ document.addEventListener('DOMContentLoaded', function () {
             fileNameLabel.textContent = filename;
             downloadLink.href = url;
 
-            // Hide all
+            iframe.src = '';
             iframe.classList.add('d-none');
             imagePreview.classList.add('d-none');
             fallback.classList.add('d-none');
 
             const ext = filename.split('.').pop().toLowerCase();
 
-            if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+            if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(ext)) {
                 previewImage.src = url;
                 imagePreview.classList.remove('d-none');
-            } else if (['pdf', 'txt', 'doc', 'docx'].includes(ext)) {
-                iframe.src = url;
+            } 
+            else if (['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ext)) {
+                iframe.src = `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`;
                 iframe.classList.remove('d-none');
-            } else {
+            } 
+            else {
                 fallback.classList.remove('d-none');
             }
 
