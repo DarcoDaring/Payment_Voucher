@@ -21,7 +21,7 @@
 
             <div class="card-body p-4">
 
-                <!-- 1. DATE + TYPE + CHEQUE NUMBER + CHEQUE BUTTON -->
+                <!-- 1. DATE + TYPE + CHEQUE NUMBER + CHEQUE DATE + ACCOUNT DETAILS + CHEQUE BUTTON -->
                 <div class="mb-4 pb-2 border-bottom">
                     <div class="d-flex justify-content-between align-items-end">
                         <!-- LEFT: Voucher Date (Big & Bold) -->
@@ -30,7 +30,7 @@
                             <p class="mb-0 fs-4 fw-bold text-dark">{{ voucher.voucher_date|date:"d M Y" }}</p>
                         </div>
 
-                        <!-- RIGHT: Type + Cheque Number + View Button -->
+                        <!-- RIGHT: Type + Cheque Number + Cheque Date + Account Details + View Button -->
                         <div class="text-end">
                             <div class="mb-2">
                                 <span class="text-muted">
@@ -40,13 +40,28 @@
                                     {% elif voucher.payment_type == 'PETTY_CASH' %}Petty Cash
                                     {% endif %}
                                 </span>
-                                <!-- CHEQUE NUMBER ADDED HERE -->
+                                <!-- CHEQUE NUMBER + CHEQUE DATE -->
                                 {% if voucher.cheque_number %}
                                     <span class="ms-3 text-white bg-dark px-2 py-1 rounded small">
                                         <strong>Cheque No:</strong> {{ voucher.cheque_number }}
                                     </span>
+                                    {% if voucher.cheque_date %}
+                                        <span class="ms-2 text-white bg-secondary px-2 py-1 rounded small">
+                                            <strong>Date:</strong> {{ voucher.cheque_date|date:"d M Y" }}
+                                        </span>
+                                    {% endif %}
                                 {% endif %}
                             </div>
+
+                            <!-- ACCOUNT DETAILS (NEW) -->
+                            {% if voucher.payment_type == 'CHEQUE' %}
+                                <div class="mb-2">
+                                    <small class="text-muted">
+                                        <strong>Account:</strong> 
+                                        {{ voucher.account_details|default:"Null" }}
+                                    </small>
+                                </div>
+                            {% endif %}
 
                             <!-- CHEQUE ATTACHMENT: VIEW BUTTON -->
                             {% if voucher.payment_type == 'CHEQUE' and voucher.cheque_attachment %}
@@ -332,13 +347,22 @@
             <p style="margin: 5px 0; font-size: 14px;">
                 <strong>No:</strong> {{ voucher.voucher_number }} | 
                 <strong>Date:</strong> {{ voucher.voucher_date|date:"d M Y" }}
+                {% if voucher.payment_type == 'CHEQUE' and voucher.cheque_number %}
+                    | <strong>Cheque No:</strong> {{ voucher.cheque_number }}
+                    {% if voucher.cheque_date %}
+                        | <strong>Cheque Date:</strong> {{ voucher.cheque_date|date:"d M Y" }}
+                    {% endif %}
+                {% endif %}
             </p>
         </div>
 
-        <!-- PAYEE & AMOUNT -->
+        <!-- PAYEE & AMOUNT + ACCOUNT DETAILS -->
         <div style="display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 14px;">
             <div>
                 <strong>Pay To:</strong> {{ voucher.name_title }} {{ voucher.pay_to }}
+                {% if voucher.payment_type == 'CHEQUE' %}
+                    <br><small><strong>Account:</strong> {{ voucher.account_details|default:"Null" }}</small>
+                {% endif %}
             </div>
             <div style="text-align: right;">
                 <strong>Amount:</strong> ₹{{ voucher.particulars.all|sum_particulars|floatformat:2 }}
@@ -350,7 +374,7 @@
             <thead>
                 <tr style="background-color: #f8f9fa; border-bottom: 2px solid #000;">
                     <th style="padding: 10px; text-align: left; border: 1px solid #ddd; width: 5%;">#</th>
-                    <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Particulars</th>
+                    <th style="padding: 10px; text-align: left; border: 1px bold #ddd;">Particulars</th>
                     <th style="padding: 10px; text-align: right; border: 1px solid #ddd; width: 20%;">Amount (₹)</th>
                 </tr>
             </thead>

@@ -8,7 +8,9 @@ from vouchers.views import (
     HomeView, VoucherListView, VoucherDetailView,
     VoucherCreateAPI, VoucherApprovalAPI,
     DesignationCreateAPI, ApprovalControlAPI,
-    UserCreateAPI, UserUpdateAPI, VoucherDeleteAPI  # ← ADDED UserUpdateAPI
+    UserCreateAPI, UserUpdateAPI, VoucherDeleteAPI,  # ← ADDED UserUpdateAPI
+    # NEW: ACCOUNT DETAIL APIS
+    AccountDetailListAPI, AccountDetailCreateAPI, AccountDetailDeleteAPI,
 )
 
 urlpatterns = [
@@ -29,6 +31,11 @@ urlpatterns = [
     path('api/approval/control/', ApprovalControlAPI.as_view(), name='approval_control_api'),  # ← Fixed: consistent path
     path('api/users/create/', UserCreateAPI.as_view(), name='user_create_api'),  # ← NEW: MODAL API
     path('api/users/update/', UserUpdateAPI.as_view(), name='user_update_api'),  # ← NEW: USER CONTROL EDIT API
+
+    # NEW: ACCOUNT DETAIL APIS
+    path('api/accounts/list/', AccountDetailListAPI.as_view(), name='account_list'),
+    path('api/accounts/create/', AccountDetailCreateAPI.as_view(), name='account_create'),
+    path('api/accounts/delete/<int:pk>/', AccountDetailDeleteAPI.as_view(), name='account_delete'),
 
     # AUTH
     path('accounts/login/', auth_views.LoginView.as_view(template_name='login.html'), name='login'),

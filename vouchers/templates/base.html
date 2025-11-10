@@ -54,6 +54,8 @@
                             <ul class="dropdown-menu dropdown-menu-end shadow">
                                 {% if user.is_superuser %}
                                 <li><a class="dropdown-item" href="{% url 'admin:index' %}">Admin Panel</a></li>
+                                <li><a class="dropdown-item" data-bs-toggle="modal" data-bs-target="#approvalControlModal">Approval Control</a></li>
+                                <li><a class="dropdown-item" data-bs-toggle="modal" data-bs-target="#userControlModal">User Control</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 {% endif %}
                                 <li><a class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#logoutModal">Logout</a></li>
@@ -77,6 +79,23 @@
                 </div>
             {% endfor %}
         </div>
+    {% endif %}
+
+    <!-- SUPER ADMIN CONTROL PANEL (MIDDLE BUTTONS) -->
+    {% if user.is_superuser %}
+    <div class="container mt-4">
+        <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+            <button type="button" class="btn btn-success btn-lg px-5" data-bs-toggle="modal" data-bs-target="#createUserModal">
+                Create User
+            </button>
+            <button type="button" class="btn btn-info btn-lg px-5 text-white" data-bs-toggle="modal" data-bs-target="#createDesignationModal">
+                Create Designation
+            </button>
+            <button type="button" class="btn btn-warning btn-lg px-5 text-dark" data-bs-toggle="modal" data-bs-target="#accountControlModal">
+                Manage Bank Accounts
+            </button>
+        </div>
+    </div>
     {% endif %}
 
     <div class="container mt-4">{% block content %}{% endblock %}</div>
@@ -343,6 +362,48 @@
     </div>
     {% endif %}
 
+    <!-- NEW: ACCOUNT CONTROL MODAL (SUPERUSER ONLY) -->
+    {% if user.is_superuser %}
+    <div class="modal fade" id="accountControlModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Manage Bank Accounts</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addAccountForm" class="row g-3 mb-4">
+                        <div class="col-md-5">
+                            <input type="text" class="form-control form-control-sm" placeholder="Bank Name" id="bank_name" required>
+                        </div>
+                        <div class="col-md-5">
+                            <input type="text" class="form-control form-control-sm" placeholder="Account Number" id="account_number" required>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-success btn-sm w-100">Add</button>
+                        </div>
+                    </form>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover" id="accountTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Bank Name</th>
+                                    <th>Account Number</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- CREATE VOUCHER MODAL - NEW COMPACT DESIGN -->
     {% if user.is_authenticated and user.groups.all.0.name == 'Accountants' %}
     <div class="modal fade" id="createVoucherModal" tabindex="-1">
@@ -395,6 +456,21 @@
                         <div class="mb-3" id="chequeNumberField" style="display:none; max-width: 300px;">
                             <label for="cheque_number" class="form-label">Cheque Number <span class="text-danger">*</span></label>
                             <input type="text" class="form-control form-control-sm" id="cheque_number" name="cheque_number" placeholder="e.g. 123456" maxlength="20">
+                        </div>
+
+                        <!-- 4.1. NEW: Cheque Date -->
+                        <div class="mb-3" id="chequeDateField" style="display:none; max-width: 300px;">
+                            <label for="cheque_date" class="form-label">Cheque Date <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control form-control-sm" id="cheque_date" name="cheque_date" max="{{ today }}">
+                        </div>
+
+                        <!-- 4.2. NEW: Account Details (Dropdown with Null) -->
+                        <div class="mb-3" id="accountDetailsField" style="display:none; max-width: 300px;">
+                            <label for="account_details" class="form-label">Account Details</label>
+                            <select class="form-select form-select-sm" id="account_details" name="account_details">
+                                <option value="">Null</option>
+                                <!-- Options filled by loadAccounts() -->
+                            </select>
                         </div>
 
                         <!-- 4.5. CHEQUE ATTACHMENT (NEW) -->
@@ -453,7 +529,35 @@
     document.addEventListener('DOMContentLoaded', function () {
         const getCsrfToken = () => window.csrfToken;
 
+        // -------------------------------------------------
+        // GLOBAL: Load bank accounts into the dropdown
+        // -------------------------------------------------
+        function loadAccounts() {
+            const select = document.getElementById('account_details');
+            if (!select) return;
+
+            // Clear existing options except the first "Null"
+            select.innerHTML = '<option value="">Null</option>';
+
+            fetch("{% url 'account_list' %}")
+                .then(r => r.json())
+                .then(accounts => {
+                    accounts.forEach(acc => {
+                        const opt = document.createElement('option');
+                        opt.value = acc.value;
+                        opt.textContent = acc.label;
+                        select.appendChild(opt);
+                    });
+                })
+                .catch(() => console.error('Failed to load accounts'));
+        }
+
+        // Run once on page load
+        loadAccounts();
+
+        // -------------------------------------------------
         // Auto-fill date
+        // -------------------------------------------------
         const dateInput = document.getElementById('voucher_date');
         if (dateInput) {
             dateInput.value = window.today;
@@ -627,6 +731,72 @@
             };
         }
 
+        // === ACCOUNT CONTROL MODAL - FIXED DELETE URL ===
+        const accountModal = document.getElementById('accountControlModal');
+        if (accountModal) {
+            const tableBody = accountModal.querySelector('#accountTable tbody');
+            const addForm = accountModal.querySelector('#addAccountForm');
+
+            function loadAccounts() {
+                fetch("{% url 'account_list' %}").then(r => r.json()).then(accounts => {
+                    tableBody.innerHTML = '';
+                    accounts.forEach(acc => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td>${acc.label.split(' / ')[0]}</td>
+                            <td>${acc.label.split(' / ')[1]}</td>
+                            <td>
+                                <button class="btn btn-sm btn-danger delete-account" data-id="${acc.value}">Delete</button>
+                            </td>
+                        `;
+                        tableBody.appendChild(tr);
+                    });
+                });
+            }
+
+            accountModal.addEventListener('show.bs.modal', loadAccounts);
+
+            addForm.onsubmit = e => {
+                e.preventDefault();
+                const bank = document.getElementById('bank_name').value.trim();
+                const acc = document.getElementById('account_number').value.trim();
+                if (!bank || !acc) return;
+
+                fetch("{% url 'account_create' %}", {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': getCsrfToken(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ bank_name: bank, account_number: acc })
+                })
+                .then(r => r.json())
+                .then(d => {
+                    if (d.id) {
+                        addForm.reset();
+                        loadAccounts();
+                    } else alert('Error: ' + (d.error || 'Failed'));
+                });
+            };
+
+            tableBody.onclick = e => {
+                const btn = e.target.closest('.delete-account');
+                if (!btn) return;
+                if (!confirm('Delete this account?')) return;
+                const id = btn.dataset.id;
+
+                fetch(`/api/accounts/delete/${id}/`, {
+                    method: 'DELETE',
+                    headers: { 'X-CSRFToken': getCsrfToken() }
+                })
+                .then(r => {
+                    if (r.ok) {
+                        loadAccounts();
+                    } else {
+                        alert('Failed to delete');
+                    }
+                })
+                .catch(() => alert('Error deleting account'));
+            };
+        }
+
         // === CREATE VOUCHER ===
         const voucherModal = document.getElementById('createVoucherModal');
         if (voucherModal) {
@@ -640,6 +810,13 @@
             const chequeInput = document.getElementById('cheque_number');
             const chequeAttachmentField = document.getElementById('chequeAttachmentField');
             const chequeAttachmentInput = document.getElementById('cheque_attachment');
+            const chequeDateField = document.getElementById('chequeDateField');
+            const chequeDateInput = document.getElementById('cheque_date');
+            const accountDetailsField = document.getElementById('accountDetailsField');
+            const accountDetailsSelect = document.getElementById('account_details');
+
+            // Refresh accounts when modal opens (in case new ones were added)
+            voucherModal.addEventListener('show.bs.modal', loadAccounts);
 
             const toggleCheque = () => {
                 if (paymentTypeSelect.value === 'CHEQUE') {
@@ -647,6 +824,9 @@
                     chequeInput.required = true;
                     chequeAttachmentField.style.display = 'block';
                     chequeAttachmentInput.required = true;
+                    chequeDateField.style.display = 'block';
+                    chequeDateInput.required = true;
+                    accountDetailsField.style.display = 'block';
                 } else {
                     chequeField.style.display = 'none';
                     chequeInput.required = false;
@@ -655,6 +835,11 @@
                     chequeAttachmentInput.required = false;
                     chequeAttachmentInput.value = '';
                     document.getElementById('chequeFileName').textContent = '';
+                    chequeDateField.style.display = 'none';
+                    chequeDateInput.required = false;
+                    chequeDateInput.value = '';
+                    accountDetailsField.style.display = 'none';
+                    accountDetailsSelect.value = '';
                 }
             };
             paymentTypeSelect.addEventListener('change', toggleCheque);
@@ -711,6 +896,12 @@
                     const chequeFile = chequeAttachmentInput.files[0];
                     if (!chequeFile) return alert('Cheque attachment is required');
                     formData.append('cheque_attachment', chequeFile);
+
+                    const chequeDate = chequeDateInput.value;
+                    if (!chequeDate) return alert('Cheque date is required');
+                    formData.append('cheque_date', chequeDate);
+
+                    formData.append('account_details', accountDetailsSelect.value);
                 }
 
                 let valid = true;

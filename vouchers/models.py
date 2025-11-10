@@ -59,6 +59,22 @@ class Voucher(models.Model):
         help_text="Required only for Cheque payments"
     )
 
+    # NEW: Cheque date (required for Cheque payments)
+    cheque_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date on the cheque - required for Cheque payments"
+    )
+
+    # UPDATED: Now references AccountDetail (ForeignKey)
+    account_details = models.ForeignKey(
+        'AccountDetail',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="Bank account for Cheque payments"
+    )
+
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='vouchers')
     created_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(
@@ -186,3 +202,18 @@ class ApprovalLevel(models.Model):
 
     def __str__(self):
         return f"{self.order}. {self.designation.name} ({'Active' if self.is_active else 'Inactive'})"
+
+
+# === NEW: ACCOUNT DETAIL MODEL (Superuser Managed) ===
+class AccountDetail(models.Model):
+    bank_name = models.CharField(max_length=200)
+    account_number = models.CharField(max_length=50)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='account_details')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('bank_name', 'account_number')
+        ordering = ['bank_name']
+
+    def __str__(self):
+        return f"{self.bank_name} / {self.account_number}"
