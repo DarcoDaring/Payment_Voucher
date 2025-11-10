@@ -11,6 +11,8 @@ from vouchers.views import (
     UserCreateAPI, UserUpdateAPI, VoucherDeleteAPI,  # ← ADDED UserUpdateAPI
     # NEW: ACCOUNT DETAIL APIS
     AccountDetailListAPI, AccountDetailCreateAPI, AccountDetailDeleteAPI,
+    # NEW: COMPANY DETAIL API
+    CompanyDetailAPI,
 )
 
 urlpatterns = [
@@ -36,6 +38,9 @@ urlpatterns = [
     path('api/accounts/list/', AccountDetailListAPI.as_view(), name='account_list'),
     path('api/accounts/create/', AccountDetailCreateAPI.as_view(), name='account_create'),
     path('api/accounts/delete/<int:pk>/', AccountDetailDeleteAPI.as_view(), name='account_delete'),
+
+    # NEW: COMPANY DETAIL API
+    path('api/company/', CompanyDetailAPI.as_view(), name='company-detail-api'),
 
     # AUTH
     path('accounts/login/', auth_views.LoginView.as_view(template_name='login.html'), name='login'),

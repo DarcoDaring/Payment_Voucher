@@ -10,7 +10,6 @@
         .btn-warning { min-width: 180px; }
         .btn-lg { min-height: 50px; }
         .file-name { font-size: 0.9em; color: #555; }
-
         /* WIDER CREATE VOUCHER MODAL */
         #createVoucherModal .modal-dialog {
             max-width: 90vw !important;
@@ -21,7 +20,6 @@
             #createVoucherModal .modal-dialog { width: 95vw; }
         }
         #createVoucherModal .modal-body { max-height: 75vh; overflow-y: auto; }
-
         #particularsTable th, #particularsTable td { vertical-align: middle; }
         .navbar .dropdown-toggle::after { display: none; }
         .grip-handle { cursor: move; color: #6c757d; }
@@ -32,7 +30,6 @@
 <body>
     {% now "Y-m-d" as today %}
     <script>window.today = "{{ today }}";</script>
-
     <!-- NAVBAR -->
     <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm">
         <div class="container-fluid">
@@ -47,7 +44,7 @@
                 <ul class="navbar-nav ms-auto align-items-center">
                     {% if user.is_authenticated %}
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle text-primary fw-bold d-flex align-items-center gap-2" 
+                            <a class="nav-link dropdown-toggle text-primary fw-bold d-flex align-items-center gap-2"
                                href="#" role="button" data-bs-toggle="dropdown">
                                 {{ user.username }}
                             </a>
@@ -68,7 +65,6 @@
             </div>
         </div>
     </nav>
-
     <!-- FLASH MESSAGES -->
     {% if messages %}
         <div class="container mt-3">
@@ -80,10 +76,10 @@
             {% endfor %}
         </div>
     {% endif %}
-
     <!-- SUPER ADMIN CONTROL PANEL (MIDDLE BUTTONS) -->
     {% if user.is_superuser %}
     <div class="container mt-4">
+        <!-- CONTROL BUTTONS -->
         <div class="d-grid gap-2 d-md-flex justify-content-md-center">
             <button type="button" class="btn btn-success btn-lg px-5" data-bs-toggle="modal" data-bs-target="#createUserModal">
                 Create User
@@ -94,12 +90,33 @@
             <button type="button" class="btn btn-warning btn-lg px-5 text-dark" data-bs-toggle="modal" data-bs-target="#accountControlModal">
                 Manage Bank Accounts
             </button>
+            <button type="button" class="btn btn-secondary btn-lg px-5" data-bs-toggle="modal" data-bs-target="#companyDetailsModal">
+                View / Edit Company Details
+            </button>
         </div>
     </div>
     {% endif %}
-
+    <!-- SINGLE ROW: VIEW VOUCHERS + CREATE VOUCHER (IF ELIGIBLE) -->
+    {% if user.is_authenticated %}
+    <div class="container mt-4 text-center">
+        <div class="d-flex justify-content-center gap-3 flex-wrap">
+            <a href="{% url 'voucher_list' %}" class="btn btn-primary btn-lg px-5 shadow-sm">
+                View Vouchers
+            </a>
+            <!-- CREATE VOUCHER BUTTON - ONLY FOR ACCOUNTANTS, ADMIN STAFF & SUPERUSER -->
+            {% with user_group=user.groups.all.0.name %}
+                {% if user_group == 'Accountants' or user_group == 'Admin Staff' or user.is_superuser %}
+                <button class="btn btn-success btn-lg px-5 shadow-sm"
+                        data-bs-toggle="modal"
+                        data-bs-target="#createVoucherModal">
+                    Create Voucher
+                </button>
+                {% endif %}
+            {% endwith %}
+        </div>
+    </div>
+    {% endif %}
     <div class="container mt-4">{% block content %}{% endblock %}</div>
-
     <!-- LOGOUT MODAL -->
     {% if user.is_authenticated %}
     <div class="modal fade" id="logoutModal" tabindex="-1">
@@ -109,7 +126,7 @@
                     <h5 class="modal-title">Confirm Logout</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body"><p>Are you sure you want to log out?</p></div>
+                <div class="modal-body"><p>Are you sure you to log out?</p></div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <form method="post" action="{% url 'logout' %}" class="d-inline">
@@ -121,7 +138,6 @@
         </div>
     </div>
     {% endif %}
-
     <!-- SUCCESS MODAL -->
     <div class="modal fade" id="successModal" tabindex="-1">
         <div class="modal-dialog modal-sm">
@@ -139,7 +155,6 @@
             </div>
         </div>
     </div>
-
     <!-- CREATE DESIGNATION MODAL -->
     <div class="modal fade" id="createDesignationModal" tabindex="-1">
         <div class="modal-dialog">
@@ -163,7 +178,6 @@
             </div>
         </div>
     </div>
-
     <!-- CREATE USER MODAL (SUPERUSER ONLY) -->
     {% if user.is_superuser %}
     <div class="modal fade" id="createUserModal" tabindex="-1">
@@ -216,7 +230,6 @@
         </div>
     </div>
     {% endif %}
-
     <!-- CONTROL APPROVAL MODAL -->
     {% if user.is_superuser %}
     <div class="modal fade" id="approvalControlModal" tabindex="-1">
@@ -244,7 +257,6 @@
         </div>
     </div>
     {% endif %}
-
     <!-- USER CONTROL MODAL (SUPERUSER ONLY) -->
     {% if user.is_superuser %}
     <div class="modal fade" id="userControlModal" tabindex="-1">
@@ -302,7 +314,6 @@
             </div>
         </div>
     </div>
-
     <!-- EDIT USER MODAL (inside User Control) -->
     <div class="modal fade" id="editUserModal" tabindex="-1">
         <div class="modal-dialog">
@@ -361,7 +372,6 @@
         </div>
     </div>
     {% endif %}
-
     <!-- NEW: ACCOUNT CONTROL MODAL (SUPERUSER ONLY) -->
     {% if user.is_superuser %}
     <div class="modal fade" id="accountControlModal" tabindex="-1">
@@ -403,158 +413,212 @@
         </div>
     </div>
     {% endif %}
-
-    <!-- CREATE VOUCHER MODAL - NEW COMPACT DESIGN -->
-    {% if user.is_authenticated and user.groups.all.0.name == 'Accountants' %}
-    <div class="modal fade" id="createVoucherModal" tabindex="-1">
-        <div class="modal-dialog modal-xl">
+    <!-- UPDATED: COMPANY DETAILS MODAL (SUPERUSER ONLY) -->
+    {% if user.is_superuser %}
+    <div class="modal fade" id="companyDetailsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Create New Voucher</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="createVoucherForm" enctype="multipart/form-data">
-
-                        <!-- 1. Voucher Date - Top Right -->
-                        <div class="text-end mb-4">
-                            <div class="d-inline-block" style="width: 180px;">
-                                <label for="voucher_date" class="form-label fw-bold text-primary">
-                                    Voucher Date <span class="text-danger">*</span>
-                                </label>
-                                <input type="date" class="form-control form-control-sm" id="voucher_date" name="voucher_date" max="{{ today }}" required>
+                <form id="companyDetailsForm" enctype="multipart/form-data">
+                    <div class="modal-header">
+                        <h5 class="modal-title">View / Edit Company Details</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- NEW: No data message -->
+                        <div id="noCompanyMessage" class="alert alert-info text-center mb-3" style="display: none;">
+                            No company details have been added yet. Fill the form below to add.
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Company Name <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="company_name" name="name" required maxlength="200">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">GST No</label>
+                                <input type="text" class="form-control" id="company_gst" name="gst_no" maxlength="15" placeholder="e.g. 22AAAAA0000A1Z5">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">PAN No</label>
+                                <input type="text" class="form-control" id="company_pan" name="pan_no" maxlength="10" placeholder="e.g. ABCDE1234F">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Address</label>
+                                <textarea class="form-control" id="company_address" name="address" rows="2"></textarea>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Logo (PNG/JPG, max 2MB)</label>
+                                <input type="file" class="form-control form-control-sm" id="company_logo" name="logo" accept="image/png,image/jpeg">
+                                <div class="mt-2 text-center" id="currentLogoPreview" style="display:none;">
+                                    <p class="small text-muted mb-1">Current Logo:</p>
+                                    <img id="currentLogoImg" src="" alt="Current Logo" style="max-height: 80px; border: 1px dashed #ccc; padding: 5px;">
+                                </div>
                             </div>
                         </div>
-
-                        <!-- 2. Title (SUPER SMALL) + Pay To (Full) -->
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-2">
-                                <label for="name_title" class="form-label">Title <span class="text-danger">*</span></label>
-                                <select class="form-select form-select-sm" id="name_title" name="name_title" required>
-                                    <option value="MR">Mr.</option>
-                                    <option value="MRS">Mrs.</option>
-                                    <option value="MS">Ms.</option>
-                                </select>
-                            </div>
-                            <div class="col-md-10">
-                                <label for="pay_to" class="form-label">Pay To <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="pay_to" name="pay_to" required placeholder="Enter full name">
-                            </div>
-                        </div>  
-
-                        <!-- 3. Payment Type -->
-                        <div class="mb-3" style="max-width: 300px;">
-                            <label for="payment_type" class="form-label">Payment Type <span class="text-danger">*</span></label>
-                            <select class="form-select form-select-sm" id="payment_type" name="payment_type" required>
-                                <option value="CASH">Cash</option>
-                                <option value="CHEQUE">Cheque</option>
-                                <option value="PETTY_CASH">Petty Cash</option>
-                            </select>
-                        </div>
-
-                        <!-- 4. Cheque Number -->
-                        <div class="mb-3" id="chequeNumberField" style="display:none; max-width: 300px;">
-                            <label for="cheque_number" class="form-label">Cheque Number <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control form-control-sm" id="cheque_number" name="cheque_number" placeholder="e.g. 123456" maxlength="20">
-                        </div>
-
-                        <!-- 4.1. NEW: Cheque Date -->
-                        <div class="mb-3" id="chequeDateField" style="display:none; max-width: 300px;">
-                            <label for="cheque_date" class="form-label">Cheque Date <span class="text-danger">*</span></label>
-                            <input type="date" class="form-control form-control-sm" id="cheque_date" name="cheque_date" max="{{ today }}">
-                        </div>
-
-                        <!-- 4.2. NEW: Account Details (Dropdown with Null) -->
-                        <div class="mb-3" id="accountDetailsField" style="display:none; max-width: 300px;">
-                            <label for="account_details" class="form-label">Account Details</label>
-                            <select class="form-select form-select-sm" id="account_details" name="account_details">
-                                <option value="">Null</option>
-                                <!-- Options filled by loadAccounts() -->
-                            </select>
-                        </div>
-
-                        <!-- 4.5. CHEQUE ATTACHMENT (NEW) -->
-                        <div class="mb-3" id="chequeAttachmentField" style="display:none; max-width: 500px;">
-                            <label for="cheque_attachment" class="form-label">Cheque Attachment <span class="text-danger">*</span></label>
-                            <input type="file" class="form-control form-control-sm" id="cheque_attachment" name="cheque_attachment">
-                            <div class="mt-1 text-muted file-name small" id="chequeFileName"></div>
-                        </div>
-
-                        <!-- 5. Main Attachment -->
-                        <div class="mb-4" style="max-width: 500px;">
-                            <label for="attachment" class="form-label">Main Attachment <span class="text-danger">*</span></label>
-                            <input type="file" class="form-control form-control-sm" id="attachment" name="attachment" required>
-                            <div class="mt-1 text-muted file-name small" id="fileName"></div>
-                        </div>
-
-                        <hr class="my-4">
-
-                        <!-- PARTICULARS -->
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Particulars <span class="text-danger">*</span></label>
-                            <table class="table table-sm table-bordered" id="particularsTable">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th width="40%">Description</th>
-                                        <th width="20%">Amount</th>
-                                        <th width="30%">Attachment</th>
-                                        <th width="10%"></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="particularsBody">
-                                    <tr>
-                                        <td><input type="text" class="form-control form-control-sm" name="particulars[0][description]" required></td>
-                                        <td><input type="number" step="0.01" class="form-control form-control-sm" name="particulars[0][amount]" required></td>
-                                        <td><input type="file" class="form-control form-control-sm" name="particulars[0][attachment]"></td>
-                                        <td><button type="button" class="btn btn-sm btn-danger remove-row">Remove</button></td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                            <button type="button" class="btn btn-sm btn-primary" id="addParticular">Add Row</button>
-                        </div>
-
-                        <div class="d-grid">
-                            <button type="submit" class="btn btn-primary btn-lg">Submit Voucher</button>
-                        </div>
-                    </form>
-                </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Details</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
     {% endif %}
-
+    <!-- CREATE VOUCHER MODAL - WORKS FOR ACCOUNTANTS, ADMIN STAFF & SUPERUSER -->
+    {% if user.is_authenticated %}
+        {% with user_group=user.groups.all.0.name %}
+            {% if user_group == 'Accountants' or user_group == 'Admin Staff' or user.is_superuser %}
+                <div class="modal fade" id="createVoucherModal" tabindex="-1">
+                    <div class="modal-dialog modal-xl">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Create New Voucher</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <form id="createVoucherForm" enctype="multipart/form-data">
+                                    <!-- 1. Voucher Date - Top Right -->
+                                    <div class="text-end mb-4">
+                                        <div class="d-inline-block" style="width: 180px;">
+                                            <label for="voucher_date" class="form-label fw-bold text-primary">
+                                                Voucher Date <span class="text-danger">*</span>
+                                            </label>
+                                            <input type="date" class="form-control form-control-sm" id="voucher_date" name="voucher_date" max="{{ today }}" required>
+                                        </div>
+                                    </div>
+                                    <!-- 2. Title (SUPER SMALL) + Pay To (Full) -->
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-md-2">
+                                            <label for="name_title" class="form-label">Title <span class="text-danger">*</span></label>
+                                            <select class="form-select form-select-sm" id="name_title" name="name_title" required>
+                                                <option value="MR">Mr.</option>
+                                                <option value="MRS">Mrs.</option>
+                                                <option value="MS">Ms.</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-10">
+                                            <label for="pay_to" class="form-label">Pay To <span class="text-danger">*</span></label>
+                                            <input type="text" class="form-control" id="pay_to" name="pay_to" required placeholder="Enter full name">
+                                        </div>
+                                    </div>
+                                    <!-- 3. Payment Type + CHEQUE FIELDS IN ONE ROW -->
+                                    <div class="mb-3">
+                                        <div class="row g-3 align-items-end">
+                                            <!-- Payment Type -->
+                                            <div class="col-md-3">
+                                                <label for="payment_type" class="form-label">Payment Type <span class="text-danger">*</span></label>
+                                                <select class="form-select form-select-sm" id="payment_type" name="payment_type" required>
+                                                    <option value="CASH">Cash</option>
+                                                    <option value="CHEQUE">Cheque</option>
+                                                    <option value="PETTY_CASH">Petty Cash</option>
+                                                </select>
+                                            </div>
+                                            <!-- Cheque Number -->
+                                            <div class="col-md-2" id="chequeNumberField" style="display:none;">
+                                                <label for="cheque_number" class="form-label">Cheque Number <span class="text-danger">*</span></label>
+                                                <input type="text" class="form-control form-control-sm" id="cheque_number" name="cheque_number" placeholder="e.g. 123456" maxlength="20">
+                                            </div>
+                                            <!-- Cheque Date -->
+                                            <div class="col-md-2" id="chequeDateField" style="display:none;">
+                                                <label for="cheque_date" class="form-label">Cheque Date <span class="text-danger">*</span></label>
+                                                <input type="date" class="form-control form-control-sm" id="cheque_date" name="cheque_date" max="{{ today }}">
+                                            </div>
+                                            <!-- Account Details - REQUIRED, NO NULL -->
+                                            <div class="col-md-3" id="accountDetailsField" style="display:none;">
+                                                <label for="account_details" class="form-label">Account Details <span class="text-danger">*</span></label>
+                                                <select class="form-select form-select-sm" id="account_details" name="account_details" required>
+                                                    <!-- Options filled by loadAccounts() -->
+                                                </select>
+                                            </div>
+                                            <!-- Cheque Attachment -->
+                                            <div class="col-md-2" id="chequeAttachmentField" style="display:none;">
+                                                <label for="cheque_attachment" class="form-label">Cheque Attachment <span class="text-danger">*</span></label>
+                                                <div class="input-group input-group-sm">
+                                                    <input type="file" class="form-control form-control-sm" id="cheque_attachment" name="cheque_attachment">
+                                                    <div class="mt-1 text-muted file-name small" id="chequeFileName"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- 5. Main Attachment (Below) - NOW OPTIONAL -->
+                                    <div class="mb-4" style="max-width: 500px;">
+                                        <label for="attachment" class="form-label">Main Attachment</label>
+                                        <input type="file" class="form-control form-control-sm" id="attachment" name="attachment">
+                                        <div class="mt-1 text-muted file-name small" id="fileName"></div>
+                                    </div>
+                                    <hr class="my-4">
+                                    <!-- PARTICULARS -->
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Particulars <span class="text-danger">*</span></label>
+                                        <table class="table table-sm table-bordered" id="particularsTable">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th width="40%">Description</th>
+                                                    <th width="20%">Amount</th>
+                                                    <th width="30%">Attachment</th>
+                                                    <th width="10%"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="particularsBody">
+                                                <tr>
+                                                    <td><input type="text" class="form-control form-control-sm" name="particulars[0][description]" required></td>
+                                                    <td><input type="number" step="0.01" class="form-control form-control-sm" name="particulars[0][amount]" required></td>
+                                                    <td><input type="file" class="form-control form-control-sm" name="particulars[0][attachment]" required></td>
+                                                    <td><button type="button" class="btn btn-sm btn-danger remove-row">Remove</button></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                        <button type="button" class="btn btn-sm btn-primary" id="addParticular">Add Row</button>
+                                    </div>
+                                    <div class="d-grid">
+                                        <button type="submit" class="btn btn-primary btn-lg">Submit Voucher</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        {% endwith %}
+    {% endif %}
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         const getCsrfToken = () => window.csrfToken;
-
         // -------------------------------------------------
-        // GLOBAL: Load bank accounts into the dropdown
+        // GLOBAL: Load bank accounts into the dropdown (NO NULL)
         // -------------------------------------------------
         function loadAccounts() {
             const select = document.getElementById('account_details');
             if (!select) return;
-
-            // Clear existing options except the first "Null"
-            select.innerHTML = '<option value="">Null</option>';
-
+            select.innerHTML = ''; // Remove "Null" option
             fetch("{% url 'account_list' %}")
                 .then(r => r.json())
                 .then(accounts => {
-                    accounts.forEach(acc => {
+                    if (accounts.length === 0) {
                         const opt = document.createElement('option');
-                        opt.value = acc.value;
-                        opt.textContent = acc.label;
+                        opt.value = "";
+                        opt.textContent = "-- No Accounts --";
+                        opt.disabled = true;
                         select.appendChild(opt);
-                    });
+                    } else {
+                        accounts.forEach(acc => {
+                            const opt = document.createElement('option');
+                            opt.value = acc.value;
+                            opt.textContent = acc.label;
+                            select.appendChild(opt);
+                        });
+                    }
                 })
-                .catch(() => console.error('Failed to load accounts'));
+                .catch(() => {
+                    const opt = document.createElement('option');
+                    opt.value = "";
+                    opt.textContent = "-- Load Failed --";
+                    opt.disabled = true;
+                    select.appendChild(opt);
+                });
         }
-
-        // Run once on page load
         loadAccounts();
-
         // -------------------------------------------------
         // Auto-fill date
         // -------------------------------------------------
@@ -563,7 +627,6 @@
             dateInput.value = window.today;
             dateInput.max = window.today;
         }
-
         // === CREATE DESIGNATION ===
         const createForm = document.getElementById('createDesignationForm');
         if (createForm) {
@@ -586,14 +649,12 @@
                 });
             });
         }
-
         // === CREATE USER ===
         const userForm = document.getElementById('createUserForm');
         if (userForm) {
             const groupSelect = document.getElementById('user_group');
             const designationField = document.getElementById('designation_field_user');
             const designationSelect = document.getElementById('user_designation');
-
             groupSelect.addEventListener('change', function() {
                 if (this.value === 'Admin Staff') {
                     designationField.style.display = 'block';
@@ -604,7 +665,6 @@
                     designationSelect.value = '';
                 }
             });
-
             userForm.addEventListener('submit', function (e) {
                 e.preventDefault();
                 const formData = new FormData();
@@ -618,7 +678,6 @@
                 }
                 const signature = document.getElementById('user_signature').files[0];
                 if (signature) formData.append('signature', signature);
-
                 fetch("{% url 'user_create_api' %}", {
                     method: 'POST',
                     headers: { 'X-CSRFToken': getCsrfToken() },
@@ -636,8 +695,7 @@
                 });
             });
         }
-
-        // === APPROVAL CONTROL (ACTIVE TOGGLE REMOVED) ===
+        // === APPROVAL CONTROL ===
         const controlModal = document.getElementById('approvalControlModal');
         if (controlModal) {
             const list = document.getElementById('approvalLevelsList');
@@ -645,7 +703,6 @@
             const addBtn = document.getElementById('addDesignationBtn');
             const saveBtn = document.getElementById('saveApprovalControl');
             let allDesignations = [], currentLevels = [];
-
             function render() {
                 list.innerHTML = '';
                 currentLevels.forEach((lvl, idx) => {
@@ -676,13 +733,11 @@
                     }
                 });
             }
-
             fetch("{% url 'approval_control_api' %}").then(r => r.json()).then(data => {
                 allDesignations = data.all_designations;
                 currentLevels = data.levels.map(l => ({ id: l.id, name: l.name }));
                 render();
             });
-
             let dragged;
             list.addEventListener('dragstart', e => { dragged = e.target.closest('.list-group-item'); });
             list.addEventListener('dragover', e => e.preventDefault());
@@ -697,13 +752,11 @@
                 if (after == null) list.appendChild(dragged);
                 else list.insertBefore(dragged, after);
             });
-
             addBtn.onclick = () => {
                 const id = parseInt(select.value);
                 const name = select.selectedOptions[0].textContent;
                 if (id) { currentLevels.push({ id, name }); render(); }
             };
-
             list.onclick = e => {
                 const item = e.target.closest('.list-group-item');
                 if (!item) return;
@@ -712,7 +765,6 @@
                     render();
                 }
             };
-
             saveBtn.onclick = () => {
                 const levels = Array.from(list.children).map(el => ({
                     id: parseInt(el.dataset.id)
@@ -730,13 +782,11 @@
                 });
             };
         }
-
-        // === ACCOUNT CONTROL MODAL - FIXED DELETE URL ===
+        // === ACCOUNT CONTROL MODAL ===
         const accountModal = document.getElementById('accountControlModal');
         if (accountModal) {
             const tableBody = accountModal.querySelector('#accountTable tbody');
             const addForm = accountModal.querySelector('#addAccountForm');
-
             function loadAccounts() {
                 fetch("{% url 'account_list' %}").then(r => r.json()).then(accounts => {
                     tableBody.innerHTML = '';
@@ -753,15 +803,12 @@
                     });
                 });
             }
-
             accountModal.addEventListener('show.bs.modal', loadAccounts);
-
             addForm.onsubmit = e => {
                 e.preventDefault();
                 const bank = document.getElementById('bank_name').value.trim();
                 const acc = document.getElementById('account_number').value.trim();
                 if (!bank || !acc) return;
-
                 fetch("{% url 'account_create' %}", {
                     method: 'POST',
                     headers: { 'X-CSRFToken': getCsrfToken(), 'Content-Type': 'application/json' },
@@ -775,13 +822,11 @@
                     } else alert('Error: ' + (d.error || 'Failed'));
                 });
             };
-
             tableBody.onclick = e => {
                 const btn = e.target.closest('.delete-account');
                 if (!btn) return;
                 if (!confirm('Delete this account?')) return;
                 const id = btn.dataset.id;
-
                 fetch(`/api/accounts/delete/${id}/`, {
                     method: 'DELETE',
                     headers: { 'X-CSRFToken': getCsrfToken() }
@@ -796,7 +841,6 @@
                 .catch(() => alert('Error deleting account'));
             };
         }
-
         // === CREATE VOUCHER ===
         const voucherModal = document.getElementById('createVoucherModal');
         if (voucherModal) {
@@ -804,7 +848,6 @@
             const tbody = document.getElementById('particularsBody');
             const addBtn = document.getElementById('addParticular');
             let index = 1;
-
             const paymentTypeSelect = document.getElementById('payment_type');
             const chequeField = document.getElementById('chequeNumberField');
             const chequeInput = document.getElementById('cheque_number');
@@ -814,10 +857,7 @@
             const chequeDateInput = document.getElementById('cheque_date');
             const accountDetailsField = document.getElementById('accountDetailsField');
             const accountDetailsSelect = document.getElementById('account_details');
-
-            // Refresh accounts when modal opens (in case new ones were added)
             voucherModal.addEventListener('show.bs.modal', loadAccounts);
-
             const toggleCheque = () => {
                 if (paymentTypeSelect.value === 'CHEQUE') {
                     chequeField.style.display = 'block';
@@ -827,6 +867,7 @@
                     chequeDateField.style.display = 'block';
                     chequeDateInput.required = true;
                     accountDetailsField.style.display = 'block';
+                    accountDetailsSelect.required = true;
                 } else {
                     chequeField.style.display = 'none';
                     chequeInput.required = false;
@@ -839,86 +880,74 @@
                     chequeDateInput.required = false;
                     chequeDateInput.value = '';
                     accountDetailsField.style.display = 'none';
+                    accountDetailsSelect.required = false;
                     accountDetailsSelect.value = '';
                 }
             };
             paymentTypeSelect.addEventListener('change', toggleCheque);
             toggleCheque();
-
             document.getElementById('attachment').addEventListener('change', e => {
                 document.getElementById('fileName').textContent = e.target.files[0]?.name ? `Selected: ${e.target.files[0].name}` : '';
             });
-
             chequeAttachmentInput.addEventListener('change', e => {
                 document.getElementById('chequeFileName').textContent = e.target.files[0]?.name ? `Selected: ${e.target.files[0].name}` : '';
             });
-
             addBtn.onclick = () => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td><input type="text" class="form-control form-control-sm" name="particulars[${index}][description]" required></td>
                     <td><input type="number" step="0.01" class="form-control form-control-sm" name="particulars[${index}][amount]" required></td>
-                    <td><input type="file" class="form-control form-control-sm" name="particulars[${index}][attachment]"></td>
+                    <td><input type="file" class="form-control form-control-sm" name="particulars[${index}][attachment]" required></td>
                     <td><button type="button" class="btn btn-sm btn-danger remove-row">Remove</button></td>
                 `;
                 tbody.appendChild(row);
                 index++;
             };
-
             tbody.onclick = e => {
                 if (e.target.classList.contains('remove-row') && tbody.children.length > 1)
                     e.target.closest('tr').remove();
             };
-
             form.onsubmit = e => {
                 e.preventDefault();
                 const voucherDate = document.getElementById('voucher_date').value;
                 const paymentType = document.getElementById('payment_type').value;
                 const nameTitle = document.getElementById('name_title').value;
                 const payTo = document.getElementById('pay_to').value.trim();
-                const attachment = document.getElementById('attachment').files[0];
-
-                if (!voucherDate || !paymentType || !nameTitle || !payTo || !attachment)
+                if (!voucherDate || !paymentType || !nameTitle || !payTo)
                     return alert('Fill all required fields');
-
                 const formData = new FormData();
                 formData.append('voucher_date', voucherDate);
                 formData.append('payment_type', paymentType);
                 formData.append('name_title', nameTitle);
                 formData.append('pay_to', payTo);
-                formData.append('attachment', attachment);
-
                 if (paymentType === 'CHEQUE') {
                     const cn = chequeInput.value.trim();
                     if (!cn) return alert('Cheque number required');
                     formData.append('cheque_number', cn);
-
                     const chequeFile = chequeAttachmentInput.files[0];
                     if (!chequeFile) return alert('Cheque attachment is required');
                     formData.append('cheque_attachment', chequeFile);
-
                     const chequeDate = chequeDateInput.value;
                     if (!chequeDate) return alert('Cheque date is required');
                     formData.append('cheque_date', chequeDate);
-
-                    formData.append('account_details', accountDetailsSelect.value);
+                    const accVal = accountDetailsSelect.value;
+                    if (!accVal) return alert('Account Details is required for Cheque');
+                    formData.append('account_details', accVal);
                 }
-
                 let valid = true;
                 document.querySelectorAll('#particularsBody tr').forEach((row, i) => {
                     const desc = row.querySelector('input[name$="[description]"]').value.trim();
                     const amt = row.querySelector('input[name$="[amount]"]').value.trim();
-                    if (desc && amt) {
+                    const fileInput = row.querySelector('input[type="file"]');
+                    const file = fileInput.files[0];
+                    if (desc && amt && file) {
                         formData.append(`particulars[${i}][description]`, desc);
                         formData.append(`particulars[${i}][amount]`, amt);
-                        const file = row.querySelector('input[type="file"]').files[0];
-                        if (file) formData.append(`particulars[${i}][attachment]`, file);
+                        formData.append(`particulars[${i}][attachment]`, file);
                     } else valid = false;
                 });
-
                 if (!valid || tbody.children.length === 0)
-                    return alert('Add at least one particular');
-
+                    return alert('Add at least one particular with attachment');
                 fetch("{% url 'voucher_create_api' %}", {
                     method: 'POST',
                     headers: { 'X-CSRFToken': getCsrfToken() },
@@ -937,7 +966,7 @@
                     tbody.innerHTML = `<tr>
                         <td><input type="text" class="form-control form-control-sm" name="particulars[0][description]" required></td>
                         <td><input type="number" step="0.01" class="form-control form-control-sm" name="particulars[0][amount]" required></td>
-                        <td><input type="file" class="form-control form-control-sm" name="particulars[0][attachment]"></td>
+                        <td><input type="file" class="form-control form-control-sm" name="particulars[0][attachment]" required></td>
                         <td><button type="button" class="btn btn-sm btn-danger remove-row">Remove</button></td>
                     </tr>`;
                     index = 1;
@@ -946,15 +975,11 @@
                 .catch(err => alert('Failed: ' + (err.error || JSON.stringify(err))));
             };
         }
-
-        // === USER CONTROL & EDIT (UPDATED) ===
+        // === USER CONTROL & EDIT ===
         const userControlModal = document.getElementById('userControlModal');
         if (userControlModal) {
-            userControlModal.addEventListener('show.bs.modal', () => {
-                // Optional: refresh users
-            });
+            userControlModal.addEventListener('show.bs.modal', () => {});
         }
-
         document.querySelectorAll('.edit-user-btn').forEach(btn => {
             btn.addEventListener('click', function () {
                 const modal = document.getElementById('editUserModal');
@@ -962,7 +987,6 @@
                 modal.querySelector('#edit_username').value = this.dataset.username;
                 modal.querySelector('#edit_user_group').value = this.dataset.group;
                 modal.querySelector('#edit_user_active').checked = this.dataset.active === 'true';
-
                 const desField = modal.querySelector('#edit_designation_field');
                 const desSelect = modal.querySelector('#edit_user_designation');
                 if (this.dataset.group === 'Admin Staff') {
@@ -974,7 +998,6 @@
                     desSelect.required = false;
                     desSelect.value = '';
                 }
-
                 const currentSigPreview = modal.querySelector('#currentSignaturePreview');
                 const currentSigImg = modal.querySelector('#currentSignatureImg');
                 if (this.dataset.signature) {
@@ -983,11 +1006,9 @@
                 } else {
                     currentSigPreview.style.display = 'none';
                 }
-
                 new bootstrap.Modal(modal).show();
             });
         });
-
         const editForm = document.getElementById('editUserForm');
         if (editForm) {
             editForm.addEventListener('submit', function (e) {
@@ -997,17 +1018,14 @@
                 formData.append('username', this.querySelector('#edit_username').value.trim());
                 formData.append('user_group', this.querySelector('#edit_user_group').value);
                 formData.append('is_active', this.querySelector('#edit_user_active').checked);
-
                 const group = this.querySelector('#edit_user_group').value;
                 if (group === 'Admin Staff') {
                     const des = this.querySelector('#edit_user_designation').value;
                     if (!des) return alert('Please select a designation for Admin Staff.');
                     formData.append('designation', des);
                 }
-
                 const signature = this.querySelector('#edit_user_signature').files[0];
                 if (signature) formData.append('signature', signature);
-
                 fetch("{% url 'user_update_api' %}", {
                     method: 'POST',
                     headers: { 'X-CSRFToken': getCsrfToken() },
@@ -1025,12 +1043,73 @@
                 });
             });
         }
-
-        // === APPROVE/REJECT, FILTER, SEARCH (unchanged) ===
-        // ... your existing code here ...
+        // === UPDATED: COMPANY DETAILS MODAL ===
+        const companyModal = document.getElementById('companyDetailsModal');
+        if (companyModal) {
+            const form = document.getElementById('companyDetailsForm');
+            const logoInput = document.getElementById('company_logo');
+            const logoPreview = document.getElementById('currentLogoPreview');
+            const logoImg = document.getElementById('currentLogoImg');
+            const noDataMsg = document.getElementById('noCompanyMessage');
+            companyModal.addEventListener('show.bs.modal', () => {
+                fetch("{% url 'company-detail-api' %}")
+                    .then(r => r.ok ? r.json() : Promise.reject())
+                    .then(data => {
+                        const hasData = data.name || data.gst_no || data.pan_no || data.address || data.logo;
+                        noDataMsg.style.display = hasData ? 'none' : 'block';
+                        document.getElementById('company_name').value = data.name || '';
+                        document.getElementById('company_gst').value = data.gst_no || '';
+                        document.getElementById('company_pan').value = data.pan_no || '';
+                        document.getElementById('company_address').value = data.address || '';
+                        if (data.logo) {
+                            logoImg.src = data.logo;
+                            logoPreview.style.display = 'block';
+                        } else {
+                            logoPreview.style.display = 'none';
+                        }
+                    })
+                    .catch(() => {
+                        noDataMsg.style.display = 'block';
+                        alert('Failed to load company details');
+                    });
+            });
+            form.onsubmit = e => {
+                e.preventDefault();
+                const formData = new FormData();
+                const name = document.getElementById('company_name').value.trim();
+                if (!name) return alert('Company name is required');
+                formData.append('name', name);
+                formData.append('gst_no', document.getElementById('company_gst').value.trim());
+                formData.append('pan_no', document.getElementById('company_pan').value.trim());
+                formData.append('address', document.getElementById('company_address').value.trim());
+                const logoFile = logoInput.files[0];
+                if (logoFile) {
+                    if (logoFile.size > 2 * 1024 * 1024) return alert('Logo must be under 2MB');
+                    formData.append('logo', logoFile);
+                }
+                fetch("{% url 'company-detail-api' %}", {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': getCsrfToken() },
+                    body: formData
+                })
+                .then(r => r.json())
+                .then(d => {
+                    if (d.message) {
+                        alert(d.message);
+                        bootstrap.Modal.getInstance(companyModal).hide();
+                        if (d.company?.logo) {
+                            logoImg.src = d.company.logo + '?t=' + Date.now();
+                            logoPreview.style.display = 'block';
+                        }
+                    } else {
+                        alert('Error: ' + (d.error || 'Failed'));
+                    }
+                })
+                .catch(() => alert('Save failed'));
+            };
+        }
     });
     </script>
-
     {% block extra_js %}{% endblock %}
 </body>
 </html>

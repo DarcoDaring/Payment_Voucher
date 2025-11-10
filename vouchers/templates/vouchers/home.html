@@ -11,20 +11,8 @@
 {% else %}
 <div class="container mt-5">
     <div class="text-center">
-        <div class="mb-4 d-flex justify-content-center gap-3 flex-wrap">
-            <a href="{% url 'voucher_list' %}" class="btn btn-primary btn-lg px-5 shadow-sm">
-                View Vouchers
-            </a>
 
-            {% if is_accountant %}
-            <button class="btn btn-success btn-lg px-5 shadow-sm" 
-                    data-bs-toggle="modal" 
-                    data-bs-target="#createVoucherModal">
-                Create Voucher
-            </button>
-            {% endif %}
-        </div>
-
+        <!-- SUPERUSER-ONLY CONTROL BUTTONS (MOVED FROM BASE) -->
         {% if is_superuser %}
         <div class="d-flex justify-content-center gap-3 flex-wrap mt-4">
             <button class="btn btn-warning btn-lg px-5 shadow-sm" 
@@ -42,7 +30,7 @@
                     data-bs-target="#approvalControlModal">
                 Control Approval
             </button>
-            <!-- NEW: USER CONTROL BUTTON -->
+            <!-- USER CONTROL BUTTON -->
             <button class="btn btn-info btn-lg px-5 shadow-sm" 
                     data-bs-toggle="modal" 
                     data-bs-target="#userControlModal">
@@ -50,6 +38,7 @@
             </button>
         </div>
         {% endif %}
+
     </div>
 </div>
 {% endif %}

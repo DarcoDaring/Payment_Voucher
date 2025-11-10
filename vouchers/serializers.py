@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Voucher, Particular, VoucherApproval, ApprovalLevel, AccountDetail  # ← Added AccountDetail
+from .models import Voucher, Particular, VoucherApproval, ApprovalLevel, AccountDetail, CompanyDetail  # ← Added CompanyDetail
 from django.contrib.auth.models import User
 from django.core.validators import FileExtensionValidator
 from decimal import Decimal, InvalidOperation
@@ -7,8 +7,8 @@ from decimal import Decimal, InvalidOperation
 
 class ParticularSerializer(serializers.ModelSerializer):
     attachment = serializers.FileField(
-        required=False,
-        allow_null=True,
+        required=True,  # ← REQUIRED NOW
+        allow_null=False,
         validators=[
             FileExtensionValidator(allowed_extensions=['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx'])
         ]
@@ -29,7 +29,9 @@ class ParticularSerializer(serializers.ModelSerializer):
         return value
 
     def validate_attachment(self, value):
-        if value and value.size > 5 * 1024 * 1024:
+        if not value:
+            raise serializers.ValidationError("Attachment is required for each particular.")
+        if value.size > 5 * 1024 * 1024:
             raise serializers.ValidationError("File size cannot exceed 5 MB.")
         return value
 
@@ -58,9 +60,10 @@ class VoucherSerializer(serializers.ModelSerializer):
     created_by = serializers.ReadOnlyField(source='created_by.username')
     particulars = ParticularSerializer(many=True, required=True)
     
+    # MAIN ATTACHMENT → OPTIONAL
     attachment = serializers.FileField(
-        required=True,
-        allow_null=False,
+        required=False,
+        allow_null=True,
         validators=[
             FileExtensionValidator(
                 allowed_extensions=['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx']
@@ -85,12 +88,12 @@ class VoucherSerializer(serializers.ModelSerializer):
         ]
     )
 
-    # UPDATED: Now uses PrimaryKeyRelatedField for AccountDetail
+    # ACCOUNT DETAILS → REQUIRED FOR CHEQUE
     account_details = serializers.PrimaryKeyRelatedField(
         queryset=AccountDetail.objects.all(),
         required=False,
         allow_null=True,
-        help_text="Select bank account (optional for Cheque)"
+        help_text="Select bank account (required for Cheque)"
     )
 
     # NEW: Cheque date
@@ -115,9 +118,8 @@ class VoucherSerializer(serializers.ModelSerializer):
             'voucher_number', 'created_by', 'created_at', 'status', 'approvals'
         ]
 
-    # UPDATED: Use model property (handles snapshot vs dynamic)
     def get_required_approvers(self, obj):
-        return obj.required_approvers  # Already correct per status
+        return obj.required_approvers
 
     def get_approved_count(self, obj):
         return obj.approvals.filter(status='APPROVED').count()
@@ -134,11 +136,12 @@ class VoucherSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     'particulars': 'Each particular must have description and amount.'
                 })
+            if not p.get('attachment'):
+                raise serializers.ValidationError({
+                    'particulars': 'Attachment is required for each particular.'
+                })
 
-        if not data.get('attachment'):
-            raise serializers.ValidationError({'attachment': 'This field is required.'})
-
-        # === CHEQUE NUMBER & ATTACHMENT VALIDATION ===
+        # === CHEQUE VALIDATION ===
         if data.get('payment_type') == 'CHEQUE':
             cheque_num = data.get('cheque_number', '').strip()
             if not cheque_num:
@@ -153,12 +156,12 @@ class VoucherSerializer(serializers.ModelSerializer):
             if cheque_file.size > 5 * 1024 * 1024:
                 raise serializers.ValidationError({'cheque_attachment': 'Cheque attachment size cannot exceed 5 MB.'})
 
-            # NEW: Validate cheque_date is required
             if not data.get('cheque_date'):
                 raise serializers.ValidationError({'cheque_date': 'Cheque date is required for Cheque payments.'})
 
-            # account_details is optional (can be null)
-            # No validation needed — PrimaryKeyRelatedField handles it
+            # ACCOUNT DETAILS REQUIRED FOR CHEQUE
+            if not data.get('account_details'):
+                raise serializers.ValidationError({'account_details': 'Account Details is required for Cheque payments.'})
 
         else:
             data['cheque_number'] = None
@@ -169,36 +172,61 @@ class VoucherSerializer(serializers.ModelSerializer):
         return data
 
     def validate_attachment(self, value):
-        if not value:
-            raise serializers.ValidationError("Attachment is required.")
-        max_size = 5 * 1024 * 1024
-        if value.size > max_size:
+        if value and value.size > 5 * 1024 * 1024:
             raise serializers.ValidationError("File size cannot exceed 5 MB.")
-        return value
+        return value  # Allow None
 
     def create(self, validated_data):
         particulars_data = validated_data.pop('particulars', [])
-        attachment = validated_data.pop('attachment', None)
+        attachment = validated_data.pop('attachment', None)  # Optional
         cheque_attachment = validated_data.pop('cheque_attachment', None)
-        
-        # NEW: Extract account_details (ForeignKey instance or None)
         account_details = validated_data.pop('account_details', None)
         
-        # created_by comes from view context
         created_by = validated_data.pop('created_by', None)
         if created_by:
             validated_data['created_by'] = created_by
 
-        # Create voucher → triggers save() → saves snapshot
         voucher = Voucher.objects.create(
-            attachment=attachment,
+            attachment=attachment,  # Can be None
             cheque_attachment=cheque_attachment,
-            account_details=account_details,  # ← Now saves ForeignKey
+            account_details=account_details,
             **validated_data
         )
 
         for p_data in particulars_data:
-            p_attachment = p_data.pop('attachment', None)
+            p_attachment = p_data.pop('attachment')
             Particular.objects.create(voucher=voucher, attachment=p_attachment, **p_data)
 
         return voucher
+
+
+# === FIXED: COMPANY DETAIL SERIALIZER (SUPER ADMIN ONLY) ===
+class CompanyDetailSerializer(serializers.ModelSerializer):
+    logo = serializers.ImageField(
+        required=False,
+        allow_null=True,
+        validators=[
+            FileExtensionValidator(allowed_extensions=['png', 'jpg', 'jpeg'])
+        ]
+    )
+
+    class Meta:
+        model = CompanyDetail
+        fields = ['id', 'name', 'gst_no', 'pan_no', 'address', 'logo']
+        read_only_fields = ['id']
+
+    def validate_logo(self, value):
+        if value and value.size > 2 * 1024 * 1024:  # 2 MB
+            raise serializers.ValidationError("Logo size cannot exceed 2 MB.")
+        return value
+
+    # ← CRITICAL: Return full URL for logo in print
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        request = self.context.get('request')
+        if instance.logo:
+            if request:
+                ret['logo'] = request.build_absolute_uri(instance.logo.url)
+            else:
+                ret['logo'] = instance.logo.url
+        return ret

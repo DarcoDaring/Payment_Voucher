@@ -41,9 +41,11 @@ class Voucher(models.Model):
     payment_type = models.CharField(max_length=20, choices=PAYMENT_TYPES)
     name_title = models.CharField(max_length=5, choices=[('MR', 'Mr.'), ('MRS', 'Mrs.'), ('MS', 'Ms.')])
     pay_to = models.CharField(max_length=200)
+    
+    # MAIN ATTACHMENT → OPTIONAL
     attachment = models.FileField(upload_to='vouchers/attachments/', null=True, blank=True)
 
-    # NEW: CHEQUE NUMBER
+    # CHEQUE FIELDS
     cheque_number = models.CharField(
         max_length=20,
         blank=True,
@@ -51,7 +53,6 @@ class Voucher(models.Model):
         help_text="Required only for Cheque payments"
     )
 
-    # NEW: CHEQUE ATTACHMENT
     cheque_attachment = models.FileField(
         upload_to='vouchers/cheques/',
         null=True,
@@ -59,21 +60,20 @@ class Voucher(models.Model):
         help_text="Required only for Cheque payments"
     )
 
-    # NEW: Cheque date (required for Cheque payments)
     cheque_date = models.DateField(
         null=True,
         blank=True,
         help_text="Date on the cheque - required for Cheque payments"
     )
 
-    # UPDATED: Now references AccountDetail (ForeignKey)
+    # ACCOUNT DETAILS → REQUIRED FOR CHEQUE
     account_details = models.ForeignKey(
         'AccountDetail',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         help_text="Bank account for Cheque payments"
-    )
+     )
 
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='vouchers')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -83,7 +83,6 @@ class Voucher(models.Model):
         default='PENDING'
     )
 
-    # NEW: Store required approvers at creation time
     required_approvers_snapshot = models.JSONField(
         default=list,
         blank=True,
@@ -124,20 +123,13 @@ class Voucher(models.Model):
 
     @property
     def required_approvers(self):
-        """
-        Return required approvers:
-        - For APPROVED/REJECTED: Use snapshot (locked at creation)
-        - For PENDING: Use current active levels (dynamic)
-        """
         if self.status in ['APPROVED', 'REJECTED']:
             return self.required_approvers_snapshot or []
         else:
             return self._get_current_required_approvers()
 
     def _update_status_if_all_approved(self):
-        """Update voucher status based on approvals and rejections."""
-        required = self.required_approvers  # Uses snapshot for approved, dynamic for pending
-
+        required = self.required_approvers
         if not required:
             self.status = 'APPROVED'
             self.save(update_fields=['status'])
@@ -155,20 +147,45 @@ class Voucher(models.Model):
 
         self.save(update_fields=['status'])
 
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        # CHEQUE VALIDATION
+        if self.payment_type == 'CHEQUE':
+            if not self.cheque_number:
+                raise ValidationError("Cheque number is required for Cheque payments.")
+            if not self.cheque_attachment:
+                raise ValidationError("Cheque attachment is required for Cheque payments.")
+            if not self.cheque_date:
+                raise ValidationError("Cheque date is required for Cheque payments.")
+            if not self.account_details:
+                raise ValidationError("Account Details is required for Cheque payments.")
+        else:
+            # Clear cheque fields if not CHEQUE
+            self.cheque_number = None
+            self.cheque_attachment = None
+            self.cheque_date = None
+            self.account_details = None
+
 
 class Particular(models.Model):
     voucher = models.ForeignKey(Voucher, on_delete=models.CASCADE, related_name='particulars')
     description = models.CharField(max_length=300)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
+    
+    # PARTICULARS ATTACHMENT → REQUIRED
     attachment = models.FileField(
         upload_to='vouchers/particulars/',
-        null=True,
-        blank=True,
-        help_text="Attach receipt/invoice for this item"
+        help_text="Attach receipt/invoice for this item - REQUIRED"
     )
 
     def __str__(self):
         return f"{self.description} - {self.amount}"
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if not self.attachment:
+            raise ValidationError("Attachment is required for each particular.")
 
 
 class VoucherApproval(models.Model):
@@ -176,8 +193,6 @@ class VoucherApproval(models.Model):
     approver = models.ForeignKey(User, on_delete=models.CASCADE)
     status = models.CharField(max_length=10, choices=[('APPROVED', 'Approved'), ('REJECTED', 'Rejected')])
     approved_at = models.DateTimeField(auto_now_add=True)
-
-    # NEW: Rejection reason (only for REJECTED)
     rejection_reason = models.TextField(blank=True, null=True, help_text="Required when status is REJECTED")
 
     class Meta:
@@ -187,7 +202,6 @@ class VoucherApproval(models.Model):
         return f"{self.approver} - {self.status}"
 
 
-# === ORDERED APPROVAL LEVELS ===
 class ApprovalLevel(models.Model):
     designation = models.OneToOneField(Designation, on_delete=models.CASCADE)
     order = models.PositiveIntegerField(unique=True, help_text="Lower number = earlier in approval chain")
@@ -204,7 +218,6 @@ class ApprovalLevel(models.Model):
         return f"{self.order}. {self.designation.name} ({'Active' if self.is_active else 'Inactive'})"
 
 
-# === NEW: ACCOUNT DETAIL MODEL (Superuser Managed) ===
 class AccountDetail(models.Model):
     bank_name = models.CharField(max_length=200)
     account_number = models.CharField(max_length=50)
@@ -217,3 +230,53 @@ class AccountDetail(models.Model):
 
     def __str__(self):
         return f"{self.bank_name} / {self.account_number}"
+
+
+# === NEW: COMPANY DETAIL (SINGLETON - ONLY ONE RECORD) ===
+class CompanyDetail(models.Model):
+    """
+    Singleton model: Only ONE company detail exists at a time.
+    Used for: Company Name, GST, PAN, Address, Logo.
+    """
+    name = models.CharField(max_length=200, help_text="Company Name")
+    gst_no = models.CharField(max_length=20, blank=True, null=True, help_text="GST Number (e.g., 22AAAAA0000A1Z5)")
+    pan_no = models.CharField(max_length=15, blank=True, null=True, help_text="PAN Number (e.g., AAAAA0000A)")
+    address = models.TextField(blank=True, null=True, help_text="Full company address")
+    logo = models.ImageField(
+        upload_to='company/logo/',
+        null=True,
+        blank=True,
+        help_text="Company logo (PNG/JPG, max 2MB)"
+    )
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='company_details_updated'
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Company Detail"
+        verbose_name_plural = "Company Details"
+
+    def __str__(self):
+        return self.name or "Company"
+
+    def save(self, *args, **kwargs):
+        """
+        Enforce singleton: Only one CompanyDetail instance allowed.
+        """
+        self.pk = 1  # Force ID = 1
+        super().save(*args, **kwargs)
+        # Delete any duplicates
+        CompanyDetail.objects.exclude(pk=1).delete()
+
+    @classmethod
+    def load(cls):
+        """
+        Get the single instance (like a singleton).
+        """
+        obj, created = cls.objects.get_or_create(pk=1)
+        return obj

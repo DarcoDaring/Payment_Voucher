@@ -179,9 +179,13 @@
                         Required: {{ voucher.required_approvers|join:", " }}
                     </small>
                 </div>
+
+                <!-- ONLY SHOW "Waiting for" IF PENDING -->
+                {% if voucher.status == 'PENDING' and waiting_for_username %}
                 <div class="text-muted small">
                     Waiting for <strong>{{ waiting_for_username }}</strong>
                 </div>
+                {% endif %}
 
                 <!-- 7. ACTION BUTTONS -->
                 <div class="d-grid d-md-flex gap-2 justify-content-center">
@@ -316,7 +320,7 @@
     </div>
 </div>
 
-<!-- ==================== PRINT-ONLY SECTION (FIXED – NO BLANK PAGE) ==================== -->
+<!-- ==================== PRINT-ONLY SECTION (DYNAMIC COMPANY) ==================== -->
 <div id="print-section">
     <style type="text/css">
         @media print {
@@ -332,12 +336,34 @@
     </style>
 
     <div style="padding: 40px; font-family: Arial, sans-serif; max-width: 800px; margin: auto;">
-        <!-- COMPANY HEADER -->
+        <!-- DYNAMIC COMPANY HEADER -->
+        {% if company %}
         <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 10px;">
-            <h2>XYZ COMPANY PVT LTD</h2>
-            <p style="margin: 5px 0; font-size: 14px;">123 Business Street, City – 123456</p>
-            <p style="margin: 5px 0; font-size: 12px;">GST: 22AAAAA0000A1Z5 | PAN: AAAAA0000A</p>
+            <div style="display: flex; justify-content: center; align-items: center; gap: 20px; flex-wrap: wrap;">
+                {% if company.logo %}
+                    <img src="{{ company.logo.url }}" alt="Company Logo" style="max-height: 70px; object-fit: contain;">
+                {% endif %}
+                <div style="text-align: center;">
+                    <h2 style="margin: 0; font-weight: bold;">{{ company.name|default:"Company Name" }}</h2>
+                    {% if company.address %}
+                        <p style="margin: 5px 0; font-size: 14px;">{{ company.address|linebreaksbr }}</p>
+                    {% endif %}
+                    {% if company.gst_no or company.pan_no %}
+                        <p style="margin: 5px 0; font-size: 12px;">
+                            {% if company.gst_no %}GST: {{ company.gst_no }}{% endif %}
+                            {% if company.gst_no and company.pan_no %} | {% endif %}
+                            {% if company.pan_no %}PAN: {{ company.pan_no }}{% endif %}
+                        </p>
+                    {% endif %}
+                </div>
+            </div>
         </div>
+        {% else %}
+        <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 10px;">
+            <h2>Company Details Not Set</h2>
+            <p style="margin: 5px 0; font-size: 12px; color: #999;">Go to Settings → Company Details</p>
+        </div>
+        {% endif %}
 
         <hr class="border-dark">
 
@@ -438,6 +464,9 @@
     </div>
 </div>
 
+<!-- ==================== FIX: PASS voucher_list_url VIA data-url ==================== -->
+<div id="voucher-list-url" data-url="{% url 'voucher_list' %}" style="display: none;"></div>
+
 <script>
 /* Pre-load signatures */
 document.addEventListener('DOMContentLoaded', function () {
@@ -449,20 +478,16 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 });
-</script>
 
-<script>
 function printVoucher() {
     window.print();
 }
 
-/* === GET VOUCHER LIST URL SAFELY === */
-{% url 'voucher_list' as voucher_list_url %}
-
 document.addEventListener('DOMContentLoaded', function () {
     const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+    const listUrl = document.getElementById('voucher-list-url').dataset.url || '/vouchers/';
 
-    // === APPROVE/REJECT – FIXED REDIRECT ===
+    // === APPROVE/REJECT – NOW 100% SAFE ===
     document.querySelectorAll('.approve-btn').forEach(btn => {
         btn.addEventListener('click', function () {
             const id = this.dataset.id;
@@ -483,7 +508,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const payload = { status };
             if (status === 'REJECTED') {
-                payload.rejection_reason = reason;  // Correct variable
+                payload.rejection_reason = reason;
             }
 
             fetch(`/api/vouchers/${id}/approve/`, {
@@ -500,7 +525,7 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .then(data => {
                 if (data.status === 'APPROVED' || data.status === 'REJECTED') {
-                    window.location.href = voucher_list_url;  // Safe redirect
+                    window.location.href = listUrl;
                 } else {
                     throw new Error(data.message || 'Unknown response');
                 }
