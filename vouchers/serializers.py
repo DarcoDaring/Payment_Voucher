@@ -212,7 +212,7 @@ class CompanyDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CompanyDetail
-        fields = ['id', 'name', 'gst_no', 'pan_no', 'address', 'logo']
+        fields = ['id', 'name', 'gst_no', 'pan_no', 'address', 'email', 'phone', 'logo']  # ← ADDED email, phone
         read_only_fields = ['id']
 
     def validate_logo(self, value):

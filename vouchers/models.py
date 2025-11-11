@@ -236,12 +236,14 @@ class AccountDetail(models.Model):
 class CompanyDetail(models.Model):
     """
     Singleton model: Only ONE company detail exists at a time.
-    Used for: Company Name, GST, PAN, Address, Logo.
+    Used for: Company Name, GST, PAN, Address, Logo, Email, Phone.
     """
     name = models.CharField(max_length=200, help_text="Company Name")
     gst_no = models.CharField(max_length=20, blank=True, null=True, help_text="GST Number (e.g., 22AAAAA0000A1Z5)")
     pan_no = models.CharField(max_length=15, blank=True, null=True, help_text="PAN Number (e.g., AAAAA0000A)")
     address = models.TextField(blank=True, null=True, help_text="Full company address")
+    email = models.EmailField(blank=True, null=True, help_text="Company email address")   # <-- ADDED
+    phone = models.CharField(max_length=20, blank=True, null=True, help_text="Company phone number")   # <-- ADDED
     logo = models.ImageField(
         upload_to='company/logo/',
         null=True,

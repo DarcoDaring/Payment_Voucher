@@ -9,71 +9,73 @@
     <div class="mx-auto" style="max-width: 800px;">
         <div class="card shadow-sm border-0 rounded-4">
 
-            <!-- HEADER (CHEQUE NUMBER REMOVED FROM HERE) -->
+            <!-- HEADER (ONLY VOUCHER NUMBER) -->
             <div class="card-header bg-primary text-white py-3">
                 <div class="d-flex justify-content-between align-items-center">
                     <h5 class="mb-0 fw-bold">Voucher {{ voucher.voucher_number }}</h5>
                     <div class="text-end">
-                        <!-- Cheque number removed from header -->
+                        <!-- COMPANY INFO REMOVED FROM SCREEN VIEW -->
                     </div>
                 </div>
             </div>
 
             <div class="card-body p-4">
 
-                <!-- 1. DATE + TYPE + CHEQUE NUMBER + CHEQUE DATE + ACCOUNT DETAILS + CHEQUE BUTTON -->
+                <!-- 1. DATE + PAYMENT TYPE + CHEQUE INFO (ALL ON LEFT) -->
                 <div class="mb-4 pb-2 border-bottom">
-                    <div class="d-flex justify-content-between align-items-end">
-                        <!-- LEFT: Voucher Date (Big & Bold) -->
+                    <div class="d-flex justify-content-between align-items-start">
+                        <!-- LEFT: Voucher Date + Payment Type + Cheque Info -->
                         <div>
-                            <strong class="text-muted small d-block">Voucher Date</strong>
-                            <p class="mb-0 fs-4 fw-bold text-dark">{{ voucher.voucher_date|date:"d M Y" }}</p>
-                        </div>
+                            <!-- Voucher Date -->
+                            <div>
+                                <strong class="text-muted small d-block">Voucher Date</strong>
+                                <p class="mb-0 fs-4 fw-bold text-dark">{{ voucher.voucher_date|date:"d M Y" }}</p>
+                            </div>
 
-                        <!-- RIGHT: Type + Cheque Number + Cheque Date + Account Details + View Button -->
-                        <div class="text-end">
-                            <div class="mb-2">
+                            <!-- Payment Type + Cheque Details (Same Line, Same Style) -->
+                            <div class="mt-2">
                                 <span class="text-muted">
-                                    <strong class="text-dark">Type:</strong> 
+                                    <strong class="text-dark">Payment Type:</strong>
                                     {% if voucher.payment_type == 'CASH' %}Cash
                                     {% elif voucher.payment_type == 'CHEQUE' %}Cheque
                                     {% elif voucher.payment_type == 'PETTY_CASH' %}Petty Cash
                                     {% endif %}
                                 </span>
-                                <!-- CHEQUE NUMBER + CHEQUE DATE -->
-                                {% if voucher.cheque_number %}
-                                    <span class="ms-3 text-white bg-dark px-2 py-1 rounded small">
-                                        <strong>Cheque No:</strong> {{ voucher.cheque_number }}
+
+                                <!-- CHEQUE: Show No, Date, Account in same format -->
+                                {% if voucher.payment_type == 'CHEQUE' and voucher.cheque_number %}
+                                    <span class="ms-3 text-muted">
+                                        <strong class="text-dark">Cheque No:</strong> {{ voucher.cheque_number }}
                                     </span>
                                     {% if voucher.cheque_date %}
-                                        <span class="ms-2 text-white bg-secondary px-2 py-1 rounded small">
-                                            <strong>Date:</strong> {{ voucher.cheque_date|date:"d M Y" }}
+                                        <span class="ms-3 text-muted">
+                                            <strong class="text-dark">Date:</strong> {{ voucher.cheque_date|date:"d M Y" }}
+                                        </span>
+                                    {% endif %}
+                                    {% if voucher.account_details %}
+                                        <span class="ms-3 text-muted">
+                                            <strong class="text-dark">Account:</strong> {{ voucher.account_details }}
                                         </span>
                                     {% endif %}
                                 {% endif %}
                             </div>
 
-                            <!-- ACCOUNT DETAILS (NEW) -->
-                            {% if voucher.payment_type == 'CHEQUE' %}
-                                <div class="mb-2">
-                                    <small class="text-muted">
-                                        <strong>Account:</strong> 
-                                        {{ voucher.account_details|default:"Null" }}
-                                    </small>
-                                </div>
-                            {% endif %}
-
-                            <!-- CHEQUE ATTACHMENT: VIEW BUTTON -->
+                            <!-- CHEQUE ATTACHMENT: View Button (Next Line) -->
                             {% if voucher.payment_type == 'CHEQUE' and voucher.cheque_attachment %}
-                                <button type="button" class="btn btn-sm btn-outline-primary view-attachment-btn mt-2"
-                                        data-url="{{ voucher.cheque_attachment.url }}"
-                                        data-filename="Cheque_{{ voucher.voucher_number }}_{{ voucher.cheque_attachment.name|cut:'vouchers/cheques/'|filename }}">
-                                    View Cheque
-                                </button>
+                                <div class="mt-2">
+                                    <button type="button" class="btn btn-sm btn-outline-primary view-attachment-btn"
+                                            data-url="{{ voucher.cheque_attachment.url }}"
+                                            data-filename="Cheque_{{ voucher.voucher_number }}_{{ voucher.cheque_attachment.name|cut:'vouchers/cheques/'|filename }}">
+                                        View Cheque
+                                    </button>
+                                </div>
                             {% elif voucher.payment_type == 'CHEQUE' and not voucher.cheque_attachment %}
                                 <small class="text-warning d-block mt-2">Cheque attachment missing</small>
                             {% endif %}
                         </div>
+
+                        <!-- RIGHT: EMPTY -->
+                        <div></div>
                     </div>
                 </div>
 
@@ -320,7 +322,7 @@
     </div>
 </div>
 
-<!-- ==================== PRINT-ONLY SECTION (DYNAMIC COMPANY) ==================== -->
+<!-- ==================== PRINT-ONLY SECTION (FINAL UPDATE) ==================== -->
 <div id="print-section">
     <style type="text/css">
         @media print {
@@ -336,59 +338,74 @@
     </style>
 
     <div style="padding: 40px; font-family: Arial, sans-serif; max-width: 800px; margin: auto;">
-        <!-- DYNAMIC COMPANY HEADER -->
-        {% if company %}
-        <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 10px;">
-            <div style="display: flex; justify-content: center; align-items: center; gap: 20px; flex-wrap: wrap;">
-                {% if company.logo %}
-                    <img src="{{ company.logo.url }}" alt="Company Logo" style="max-height: 70px; object-fit: contain;">
+        <!-- TOP SECTION: LEFT (Voucher Info) + RIGHT (Company Info) -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 15px;">
+            <!-- LEFT: Payment Voucher + Details -->
+            <div style="flex: 1;">
+                <h4 style="margin: 0 0 8px 0; font-weight: bold; text-transform: uppercase; font-size: 18px;">Payment Voucher</h4>
+                <p style="margin: 4px 0; font-size: 13px;"><strong>Voucher No:</strong> {{ voucher.voucher_number }}</p>
+                <p style="margin: 4px 0; font-size: 13px;"><strong>Voucher Date:</strong> {{ voucher.voucher_date|date:"d M Y" }}</p>
+                <p style="margin: 4px 0; font-size: 13px;">
+                    <strong>Payment Type:</strong>
+                    {% if voucher.payment_type == 'CASH' %}Cash
+                    {% elif voucher.payment_type == 'CHEQUE' %}Cheque
+                    {% elif voucher.payment_type == 'PETTY_CASH' %}Petty Cash
+                    {% endif %}
+                </p>
+                {% if voucher.payment_type == 'CHEQUE' and voucher.cheque_number %}
+                    <p style="margin: 4px 0; font-size: 13px;"><strong>Cheque No:</strong> {{ voucher.cheque_number }}</p>
+                    {% if voucher.cheque_date %}
+                        <p style="margin: 4px 0; font-size: 13px;"><strong>Cheque Date:</strong> {{ voucher.cheque_date|date:"d M Y" }}</p>
+                    {% endif %}
+                    {% if voucher.account_details %}
+                        <p style="margin: 4px 0; font-size: 13px;"><strong>Account:</strong> {{ voucher.account_details }}</p>
+                    {% endif %}
                 {% endif %}
-                <div style="text-align: center;">
-                    <h2 style="margin: 0; font-weight: bold;">{{ company.name|default:"Company Name" }}</h2>
-                    {% if company.address %}
-                        <p style="margin: 5px 0; font-size: 14px;">{{ company.address|linebreaksbr }}</p>
+            </div>
+
+            <!-- RIGHT: Company Logo + Address (Aligned with heading) -->
+            <div style="flex: 1; text-align: right; display: flex; flex-direction: column; justify-content: flex-start; min-height: 60px;">
+                {% if company.logo %}
+                    <div style="margin-bottom: 8px;">
+                        <img src="{{ company.logo.url }}" alt="Company Logo" style="max-height: 60px; object-fit: contain;">
+                    </div>
+                {% endif %}
+
+                {% if company.address %}
+                    {% with addr=company.address|linebreaksbr %}
+                        {% with line1=addr|cut:"<br/>"|cut:"<br />"|cut:"<br>"|cut:"</p>"|cut:"<p>"|striptags|truncatechars:200 %}
+                            {% with line2=addr|cut:line1|cut:"<br/>"|cut:"<br />"|cut:"<br>"|striptags|truncatechars:200 %}
+                                {% if line1 %}
+                                    <p style="margin: 2px 0; font-size: 13px;">{{ line1|safe }}</p>
+                                {% endif %}
+                                {% if line2 and line2 != line1 %}
+                                    <p style="margin: 2px 0; font-size: 13px;">{{ line2|safe }}</p>
+                                {% endif %}
+                            {% endwith %}
+                        {% endwith %}
+                    {% endwith %}
+                {% endif %}
+
+                {% if company.gst_no or company.pan_no or company.email or company.phone %}
+                    <p style="margin: 5px 0 0 0; font-size: 11px;">
+                        {% if company.gst_no %}GST: {{ company.gst_no }}{% endif %}
+                        {% if company.gst_no and company.pan_no %} | {% endif %}
+                        {% if company.pan_no %}PAN: {{ company.pan_no }}{% endif %}
+                    </p>
+                    {% if company.email %}
+                        <p style="margin: 0; font-size: 11px;">Email: {{ company.email }}</p>
                     {% endif %}
-                    {% if company.gst_no or company.pan_no %}
-                        <p style="margin: 5px 0; font-size: 12px;">
-                            {% if company.gst_no %}GST: {{ company.gst_no }}{% endif %}
-                            {% if company.gst_no and company.pan_no %} | {% endif %}
-                            {% if company.pan_no %}PAN: {{ company.pan_no }}{% endif %}
-                        </p>
+                    {% if company.phone %}
+                        <p style="margin: 0; font-size: 11px;">Phone: {{ company.phone }}</p>
                     {% endif %}
-                </div>
+                {% endif %}
             </div>
         </div>
-        {% else %}
-        <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 10px;">
-            <h2>Company Details Not Set</h2>
-            <p style="margin: 5px 0; font-size: 12px; color: #999;">Go to Settings → Company Details</p>
-        </div>
-        {% endif %}
 
-        <hr class="border-dark">
-
-        <!-- VOUCHER TITLE -->
-        <div style="text-align: center; margin: 20px 0;">
-            <h4 class="fw-bold text-uppercase">Payment Voucher</h4>
-            <p style="margin: 5px 0; font-size: 14px;">
-                <strong>No:</strong> {{ voucher.voucher_number }} | 
-                <strong>Date:</strong> {{ voucher.voucher_date|date:"d M Y" }}
-                {% if voucher.payment_type == 'CHEQUE' and voucher.cheque_number %}
-                    | <strong>Cheque No:</strong> {{ voucher.cheque_number }}
-                    {% if voucher.cheque_date %}
-                        | <strong>Cheque Date:</strong> {{ voucher.cheque_date|date:"d M Y" }}
-                    {% endif %}
-                {% endif %}
-            </p>
-        </div>
-
-        <!-- PAYEE & AMOUNT + ACCOUNT DETAILS -->
-        <div style="display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 14px;">
+        <!-- PAYEE & AMOUNT -->
+        <div style="display: flex; justify-content: space-between; margin: 20px 0; font-size: 14px;">
             <div>
                 <strong>Pay To:</strong> {{ voucher.name_title }} {{ voucher.pay_to }}
-                {% if voucher.payment_type == 'CHEQUE' %}
-                    <br><small><strong>Account:</strong> {{ voucher.account_details|default:"Null" }}</small>
-                {% endif %}
             </div>
             <div style="text-align: right;">
                 <strong>Amount:</strong> ₹{{ voucher.particulars.all|sum_particulars|floatformat:2 }}
@@ -400,7 +417,7 @@
             <thead>
                 <tr style="background-color: #f8f9fa; border-bottom: 2px solid #000;">
                     <th style="padding: 10px; text-align: left; border: 1px solid #ddd; width: 5%;">#</th>
-                    <th style="padding: 10px; text-align: left; border: 1px bold #ddd;">Particulars</th>
+                    <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Particulars</th>
                     <th style="padding: 10px; text-align: right; border: 1px solid #ddd; width: 20%;">Amount (₹)</th>
                 </tr>
             </thead>
@@ -421,6 +438,11 @@
             </tbody>
         </table>
 
+        <!-- CREATED BY: JUST BELOW PARTICULARS -->
+        <div style="margin-top: 15px; font-size: 13px; text-align: right;">
+            <strong>Created by:</strong> {{ voucher.created_by.get_full_name|default:voucher.created_by.username }}
+        </div>
+
         <!-- APPROVAL SIGNATURES -->
         <div style="margin-top: 50px;">
             <div style="display: flex; flex-wrap: wrap; gap: 20px; justify-content: space-around;">
@@ -429,8 +451,7 @@
                     <div class="signature-block">
                         <div style="font-size: 13px;">
                             <strong>{{ approval.approver.get_full_name|default:approval.approver.username }}</strong><br>
-                            <small>{{ approval.approver.userprofile.designation.name }}</small><br>
-                            <small>Approved on {{ approval.approved_at|date:"d M Y H:i" }}</small>
+                            <small>{{ approval.approver.userprofile.designation.name }}</small>
                         </div>
                         {% if approval.approver.userprofile.signature %}
                             <img src="{{ approval.approver.userprofile.signature.url }}" class="signature-img" alt="Signature">
@@ -447,10 +468,9 @@
             </div>
         </div>
 
-        <!-- FOOTER -->
-        <div style="text-align: center; margin-top: 60px; font-size: 11px; color: #666;">
+        <!-- FOOTER: NO "Generated on" TEXT -->
+        <div style="text-align: center; margin-top: 60px;">
             <hr style="border-top: 1px dashed #ccc;">
-            <p>Generated on {{ "now"|date:"d M Y H:i" }} | Voucher System</p>
         </div>
     </div>
 
@@ -577,6 +597,13 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 });
+    document.addEventListener('keydown', function(e) {
+    if (e.ctrlKey && e.key === 'p') {
+        e.preventDefault();
+        
+    }
+});
+
 </script>
 
 <style>

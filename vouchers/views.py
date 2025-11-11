@@ -9,12 +9,11 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.parsers import MultiPartParser, FormParser  # ← ADDED
 from .models import (
     Voucher, Particular, VoucherApproval, Designation,
     ApprovalLevel, UserProfile, AccountDetail, CompanyDetail  # ← Added CompanyDetail
 )
-from .serializers import VoucherSerializer, VoucherApprovalSerializer, AccountDetailSerializer, CompanyDetailSerializer  # ← Added
+from .serializers import VoucherSerializer, VoucherApprovalSerializer, AccountDetailSerializer
 from django.contrib.auth.models import User, Group
 from django.contrib.auth.hashers import make_password
 from django.db import transaction, OperationalError
@@ -28,9 +27,15 @@ from datetime import datetime
 class AccountantRequiredMixin(LoginRequiredMixin):
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
+            if request.headers.get('Accept') == 'application/json' or request.path.startswith('/api/'):
+                return JsonResponse({'error': 'Authentication required.'}, status=401)
             return self.handle_no_permission()
+        
         if not request.user.groups.filter(name='Accountants').exists():
-            messages.error(request, "Only Accountants can perform this action.")
+            error_msg = "Only Accountants can perform this action."
+            if request.headers.get('Accept') == 'application/json' or request.path.startswith('/api/'):
+                return JsonResponse({'error': error_msg}, status=403)
+            messages.error(request, error_msg)
             return redirect('home')
         return super().dispatch(request, *args, **kwargs)
 
@@ -38,9 +43,15 @@ class AccountantRequiredMixin(LoginRequiredMixin):
 class AdminStaffRequiredMixin(LoginRequiredMixin):
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
+            if request.headers.get('Accept') == 'application/json' or request.path.startswith('/api/'):
+                return JsonResponse({'error': 'Authentication required.'}, status=401)
             return self.handle_no_permission()
+        
         if not (request.user.groups.filter(name='Admin Staff').exists() or request.user.is_superuser):
-            messages.error(request, "Only Admin Staff can perform this action.")
+            error_msg = "Only Admin Staff can perform this action."
+            if request.headers.get('Accept') == 'application/json' or request.path.startswith('/api/'):
+                return JsonResponse({'error': error_msg}, status=403)
+            messages.error(request, error_msg)
             return redirect('home')
         return super().dispatch(request, *args, **kwargs)
 
@@ -53,7 +64,7 @@ class HomeView(TemplateView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
 
-        context['is_accountant'] = user.is_authenticated and user.groups.filter(name='Accountants').exists()
+        context['can_create_voucher'] = user.is_authenticated
         context['is_admin_staff'] = user.is_authenticated and (user.groups.filter(name='Admin Staff').exists() or user.is_superuser)
         context['is_superuser'] = user.is_superuser
         context['designations'] = Designation.objects.all()
@@ -83,7 +94,7 @@ class VoucherListView(LoginRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
-        context['is_accountant'] = user.is_authenticated and user.groups.filter(name='Accountants').exists()
+        context['can_create_voucher'] = user.is_authenticated
         context['is_admin_staff'] = user.is_authenticated and (user.groups.filter(name='Admin Staff').exists() or user.is_superuser)
         context['designations'] = Designation.objects.all()
 
@@ -226,7 +237,7 @@ class VoucherDetailView(LoginRequiredMixin, DetailView):
         user = self.request.user
         voucher = context['voucher']
 
-        context['is_accountant'] = user.is_authenticated and user.groups.filter(name='Accountants').exists()
+        context['can_create_voucher'] = user.is_authenticated
         context['is_admin_staff'] = user.is_authenticated and (user.groups.filter(name='Admin Staff').exists() or user.is_superuser)
         context['designations'] = Designation.objects.all()
 
@@ -406,8 +417,8 @@ class AccountDetailDeleteAPI(APIView):
             return Response({'error': 'Account not found'}, status=404)
 
 
-# CHANGED: Now uses AdminStaffRequiredMixin
-class VoucherCreateAPI(AdminStaffRequiredMixin, APIView):
+# CHANGED: Removed AccountantRequiredMixin to allow all authenticated users
+class VoucherCreateAPI(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -840,12 +851,12 @@ class UserUpdateAPI(APIView):
 # === FIXED: COMPANY DETAILS API (SUPER ADMIN ONLY) ===
 class CompanyDetailAPI(APIView):
     permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser]  # ← CRITICAL: Handle file uploads
 
     def get(self, request):
         if not request.user.is_superuser:
             return Response({'error': 'Superuser only'}, status=403)
         company = CompanyDetail.load()
+        from .serializers import CompanyDetailSerializer
         serializer = CompanyDetailSerializer(company, context={'request': request})
         return Response(serializer.data)
 
@@ -854,17 +865,26 @@ class CompanyDetailAPI(APIView):
             return Response({'error': 'Superuser only'}, status=403)
 
         company = CompanyDetail.load()
-        serializer = CompanyDetailSerializer(
-            company,
-            data=request.data,
-            partial=True,
-            context={'request': request}  # ← PASS REQUEST FOR LOGO URL
-        )
-        if serializer.is_valid():
-            serializer.save(updated_by=request.user)
-            return Response({
-                'message': 'Company details saved.',
-                'company': serializer.data
-            })
-        print("Serializer errors:", serializer.errors)  # ← DEBUG
-        return Response(serializer.errors, status=400)
+        data = request.POST.copy()
+        files = request.FILES
+
+        # Explicitly set fields from form data
+        company.name = data.get('name', company.name).strip()
+        company.gst_no = data.get('gst_no', company.gst_no or '').strip()
+        company.pan_no = data.get('pan_no', company.pan_no or '').strip()
+        company.address = data.get('address', company.address or '').strip()
+        company.email = data.get('email', company.email or '').strip()    # ← SAVE EMAIL
+        company.phone = data.get('phone', company.phone or '').strip()    # ← SAVE PHONE
+
+        if 'logo' in files:
+            company.logo = files['logo']
+
+        company.updated_by = request.user
+        company.save()
+
+        from .serializers import CompanyDetailSerializer
+        serializer = CompanyDetailSerializer(company, context={'request': request})
+        return Response({
+            'message': 'Company details saved successfully.',
+            'company': serializer.data
+        })

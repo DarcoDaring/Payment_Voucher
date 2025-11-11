@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <title>Voucher Approval System</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11/font/bootstrap-icons.css">
+    <link rel-carousel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11/font/bootstrap-icons.css">
     <style>
         .btn-warning { min-width: 180px; }
         .btn-lg { min-height: 50px; }
@@ -96,26 +96,7 @@
         </div>
     </div>
     {% endif %}
-    <!-- SINGLE ROW: VIEW VOUCHERS + CREATE VOUCHER (IF ELIGIBLE) -->
-    {% if user.is_authenticated %}
-    <div class="container mt-4 text-center">
-        <div class="d-flex justify-content-center gap-3 flex-wrap">
-            <a href="{% url 'voucher_list' %}" class="btn btn-primary btn-lg px-5 shadow-sm">
-                View Vouchers
-            </a>
-            <!-- CREATE VOUCHER BUTTON - ONLY FOR ACCOUNTANTS, ADMIN STAFF & SUPERUSER -->
-            {% with user_group=user.groups.all.0.name %}
-                {% if user_group == 'Accountants' or user_group == 'Admin Staff' or user.is_superuser %}
-                <button class="btn btn-success btn-lg px-5 shadow-sm"
-                        data-bs-toggle="modal"
-                        data-bs-target="#createVoucherModal">
-                    Create Voucher
-                </button>
-                {% endif %}
-            {% endwith %}
-        </div>
-    </div>
-    {% endif %}
+    <!-- (Buttons removed as requested) -->
     <div class="container mt-4">{% block content %}{% endblock %}</div>
     <!-- LOGOUT MODAL -->
     {% if user.is_authenticated %}
@@ -413,6 +394,7 @@
         </div>
     </div>
     {% endif %}
+
     <!-- UPDATED: COMPANY DETAILS MODAL (SUPERUSER ONLY) -->
     {% if user.is_superuser %}
     <div class="modal fade" id="companyDetailsModal" tabindex="-1">
@@ -424,7 +406,7 @@
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
-                        <!-- NEW: No data message -->
+                        <!-- No data message -->
                         <div id="noCompanyMessage" class="alert alert-info text-center mb-3" style="display: none;">
                             No company details have been added yet. Fill the form below to add.
                         </div>
@@ -445,6 +427,17 @@
                                 <label class="form-label">Address</label>
                                 <textarea class="form-control" id="company_address" name="address" rows="2"></textarea>
                             </div>
+
+                            <!-- ADDED: EMAIL & PHONE -->
+                            <div class="col-md-6">
+                                <label class="form-label">Email</label>
+                                <input type="email" class="form-control" id="company_email" name="email" placeholder="company@example.com">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Phone</label>
+                                <input type="text" class="form-control" id="company_phone" name="phone" placeholder="+91 9876543210">
+                            </div>
+
                             <div class="col-md-6">
                                 <label class="form-label">Logo (PNG/JPG, max 2MB)</label>
                                 <input type="file" class="form-control form-control-sm" id="company_logo" name="logo" accept="image/png,image/jpeg">
@@ -464,6 +457,7 @@
         </div>
     </div>
     {% endif %}
+
     <!-- CREATE VOUCHER MODAL - WORKS FOR ACCOUNTANTS, ADMIN STAFF & SUPERUSER -->
     {% if user.is_authenticated %}
         {% with user_group=user.groups.all.0.name %}
@@ -546,6 +540,9 @@
                                         <input type="file" class="form-control form-control-sm" id="attachment" name="attachment">
                                         <div class="mt-1 text-muted file-name small" id="fileName"></div>
                                     </div>
+
+                                    <!-- REMOVED: EMAIL & PHONE FROM VOUCHER FORM -->
+
                                     <hr class="my-4">
                                     <!-- PARTICULARS -->
                                     <div class="mb-3">
@@ -581,6 +578,7 @@
             {% endif %}
         {% endwith %}
     {% endif %}
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
@@ -966,7 +964,8 @@
                     tbody.innerHTML = `<tr>
                         <td><input type="text" class="form-control form-control-sm" name="particulars[0][description]" required></td>
                         <td><input type="number" step="0.01" class="form-control form-control-sm" name="particulars[0][amount]" required></td>
-                        <td><input type="file" class="form-control form-control-sm" name="particulars[0][attachment]" required></td>
+                        <td><input type="file" class="form-control form-control-sm" name="particulars[0][attachment]" required></
+
                         <td><button type="button" class="btn btn-sm btn-danger remove-row">Remove</button></td>
                     </tr>`;
                     index = 1;
@@ -1055,12 +1054,14 @@
                 fetch("{% url 'company-detail-api' %}")
                     .then(r => r.ok ? r.json() : Promise.reject())
                     .then(data => {
-                        const hasData = data.name || data.gst_no || data.pan_no || data.address || data.logo;
+                        const hasData = data.name || data.gst_no || data.pan_no || data.address || data.email || data.phone || data.logo;
                         noDataMsg.style.display = hasData ? 'none' : 'block';
                         document.getElementById('company_name').value = data.name || '';
                         document.getElementById('company_gst').value = data.gst_no || '';
                         document.getElementById('company_pan').value = data.pan_no || '';
                         document.getElementById('company_address').value = data.address || '';
+                        document.getElementById('company_email').value = data.email || '';
+                        document.getElementById('company_phone').value = data.phone || '';
                         if (data.logo) {
                             logoImg.src = data.logo;
                             logoPreview.style.display = 'block';
@@ -1082,6 +1083,8 @@
                 formData.append('gst_no', document.getElementById('company_gst').value.trim());
                 formData.append('pan_no', document.getElementById('company_pan').value.trim());
                 formData.append('address', document.getElementById('company_address').value.trim());
+                formData.append('email', document.getElementById('company_email').value.trim());
+                formData.append('phone', document.getElementById('company_phone').value.trim());
                 const logoFile = logoInput.files[0];
                 if (logoFile) {
                     if (logoFile.size > 2 * 1024 * 1024) return alert('Logo must be under 2MB');
