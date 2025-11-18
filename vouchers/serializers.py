@@ -199,6 +199,32 @@ class VoucherSerializer(serializers.ModelSerializer):
 
         return voucher
 
+    # === ADDED: Proper .update() method to fix nested writable fields error ===
+    def update(self, instance, validated_data):
+        particulars_data = validated_data.pop('particulars', None)
+        attachment = validated_data.pop('attachment', None)
+        cheque_attachment = validated_data.pop('cheque_attachment', None)
+
+        # Update scalar fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        if attachment is not None:
+            instance.attachment = attachment
+        if cheque_attachment is not None:
+            instance.cheque_attachment = cheque_attachment
+
+        instance.save()
+
+        # Replace all particulars (delete old, create new)
+        if particulars_data is not None:
+            instance.particulars.all().delete()
+            for p_data in particulars_data:
+                p_attachment = p_data.pop('attachment', None)
+                Particular.objects.create(voucher=instance, attachment=p_attachment, **p_data)
+
+        return instance
+
 
 # === FIXED: COMPANY DETAIL SERIALIZER (SUPER ADMIN ONLY) ===
 class CompanyDetailSerializer(serializers.ModelSerializer):

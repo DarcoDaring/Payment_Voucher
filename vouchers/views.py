@@ -11,7 +11,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from .models import (
     Voucher, Particular, VoucherApproval, Designation,
-    ApprovalLevel, UserProfile, AccountDetail, CompanyDetail  # ← Added CompanyDetail
+    ApprovalLevel, UserProfile, AccountDetail, CompanyDetail
 )
 from .serializers import VoucherSerializer, VoucherApprovalSerializer, AccountDetailSerializer
 from django.contrib.auth.models import User, Group
@@ -71,7 +71,6 @@ class HomeView(TemplateView):
 
         if user.is_superuser:
             context['all_users'] = User.objects.select_related('userprofile__designation').all()
-            # ← ADDED: Load singleton company
             context['company'] = CompanyDetail.load()
 
         return context
@@ -119,7 +118,6 @@ class VoucherListView(LoginRequiredMixin, ListView):
                     for name in required
                 ]
             else:
-                # For APPROVED/REJECTED: show only approved users from snapshot
                 voucher.pending_approvers = [
                     {'name': name, 'has_approved': True}
                     for name in required_snapshot
@@ -144,14 +142,12 @@ class VoucherListView(LoginRequiredMixin, ListView):
                         'some_approved': some_approved,
                         'is_next': False
                     })
-                # === FIXED: Removed 'program' typo + fixed indent ===
                 for lvl in level_data:
                     if not lvl['all_approved']:
                         lvl['is_next'] = True
                         break
                 voucher.approval_levels = level_data
             else:
-                # For APPROVED: show only approved users
                 level_data = [
                     {
                         'designation': {'name': name},
@@ -197,7 +193,7 @@ class VoucherListView(LoginRequiredMixin, ListView):
                 else:
                     waiting_for_username = "Approved"
             else:
-                waiting_for_username = "Approved"  # ← FIXED: N/A → Approved
+                waiting_for_username = "Approved"
 
             if voucher.status == 'PENDING' and (user.groups.filter(name='Admin Staff').exists() or user.is_superuser):
                 current_level = None
@@ -255,7 +251,6 @@ class VoucherDetailView(LoginRequiredMixin, DetailView):
             .values_list('approver__username', flat=True)
         )
 
-        # === PENDING APPROVERS: Show only approved users if APPROVED ===
         if voucher.status == 'APPROVED':
             snapshot = voucher.required_approvers_snapshot or []
             context['pending_approvers'] = [
@@ -270,7 +265,6 @@ class VoucherDetailView(LoginRequiredMixin, DetailView):
                 for name in required
             ]
 
-        # === APPROVAL LEVELS PROGRESS ===
         if voucher.status == 'PENDING':
             levels = ApprovalLevel.objects.filter(is_active=True) \
                 .select_related('designation').order_by('order')
@@ -306,7 +300,6 @@ class VoucherDetailView(LoginRequiredMixin, DetailView):
                 if name in approved_usernames
             ]
 
-        # === CAN APPROVE & WAITING FOR ===
         can_approve = False
         waiting_for_username = None
 
@@ -339,7 +332,7 @@ class VoucherDetailView(LoginRequiredMixin, DetailView):
             else:
                 waiting_for_username = "Approved"
         else:
-            waiting_for_username = "Approved"  # ← FIXED
+            waiting_for_username = "Approved"
 
         if voucher.status == 'PENDING' and (user.groups.filter(name='Admin Staff').exists() or user.is_superuser):
             current_level = None
@@ -358,14 +351,146 @@ class VoucherDetailView(LoginRequiredMixin, DetailView):
         context['can_approve'] = can_approve
         context['waiting_for_username'] = waiting_for_username
         context['user_profile'] = user.userprofile if hasattr(user, 'userprofile') else None
-
-        # ← ADDED: PASS COMPANY TO PRINT
         context['company'] = CompanyDetail.load()
 
         return context
 
 
-# === REST OF YOUR CODE (100% UNCHANGED BELOW) ===
+# === FULLY FIXED VoucherCreateAPI – NOW SUPPORTS BOTH CREATE & EDIT ===
+class VoucherCreateAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        data = request.POST.copy()
+        files = request.FILES
+
+        # === Check if this is an EDIT (voucher_id sent from frontend) ===
+        voucher_id = data.get('voucher_id') or request.data.get('voucher_id')
+        is_edit = bool(voucher_id)
+
+        particulars = []
+        i = 0
+        while f'particulars[{i}][description]' in data:
+            desc = data.get(f'particulars[{i}][description]', '').strip()
+            amt = data.get(f'particulars[{i}][amount]', '').strip()
+            file_key = f'particulars[{i}][attachment]'
+            attachment = files.get(file_key)
+
+            if desc and amt:
+                try:
+                    amount = Decimal(amt)
+                    if amount <= 0:
+                        return Response(
+                            {'particulars': f'Amount must be > 0 for item {i+1}'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                except InvalidOperation:
+                    return Response(
+                        {'particulars': f'Invalid amount for item {i+1}'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                if not attachment and not is_edit:  # Allow skipping attachment on edit
+                    return Response(
+                        {'particulars': f'Attachment is required for particular {i+1}'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                particulars.append({
+                    'description': desc,
+                    'amount': amount,
+                    'attachment': attachment
+                })
+            i += 1
+
+        if not particulars:
+            return Response(
+                {'particulars': 'At least one particular is required.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        payment_type = data.get('payment_type')
+        cheque_number = None
+        cheque_date = None
+        cheque_attachment = None
+        account_details_id = None
+
+        if payment_type == 'CHEQUE':
+            cheque_number = data.get('cheque_number', '').strip()
+            cheque_date_str = data.get('cheque_date', '').strip()
+            cheque_attachment = files.get('cheque_attachment')
+            account_details_id = data.get('account_details', '').strip()
+
+            if not cheque_number:
+                return Response({'error': 'Cheque number is required.'}, status=400)
+            if not cheque_date_str:
+                return Response({'error': 'Cheque date is required for Cheque payments.'}, status=400)
+            if not cheque_attachment and not is_edit:
+                return Response({'error': 'Cheque attachment is required.'}, status=400)
+            if not account_details_id:
+                return Response({'error': 'Account Details is required for Cheque payments.'}, status=400)
+
+            try:
+                cheque_date = datetime.strptime(cheque_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                return Response({'error': 'Invalid cheque date format. Use YYYY-MM-DD.'}, status=400)
+
+            try:
+                AccountDetail.objects.get(pk=account_details_id)
+            except AccountDetail.DoesNotExist:
+                return Response({'error': 'Invalid account selected.'}, status=400)
+        else:
+            data.pop('cheque_number', None)
+            data.pop('cheque_date', None)
+            data.pop('cheque_attachment', None)
+            data.pop('account_details', None)
+
+        serializer_data = {
+            'voucher_date': data.get('voucher_date'),
+            'payment_type': payment_type,
+            'name_title': data.get('name_title'),
+            'pay_to': data.get('pay_to'),
+            'cheque_number': cheque_number,
+            'cheque_date': cheque_date,
+            'account_details': account_details_id if account_details_id else None,
+            'attachment': files.get('attachment'),
+            'particulars': particulars
+        }
+
+        if payment_type == 'CHEQUE':
+            serializer_data['cheque_attachment'] = cheque_attachment
+
+        # === EDIT MODE: Update existing voucher ===
+        if is_edit:
+            try:
+                voucher = Voucher.objects.get(
+                    id=voucher_id,
+                    created_by=request.user,
+                    status='PENDING',
+                    approvals__isnull=True  # No approvals yet
+                )
+            except Voucher.DoesNotExist:
+                return Response(
+                    {'error': 'Voucher not found or cannot be edited (already approved/rejected).'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            serializer = VoucherSerializer(voucher, data=serializer_data, partial=True, context={'request': request, 'files': files})
+        else:
+            serializer = VoucherSerializer(data=serializer_data, context={'request': request, 'files': files})
+
+        if serializer.is_valid():
+            voucher = serializer.save(created_by=request.user if not is_edit else voucher.created_by)
+            action = "updated" if is_edit else "created"
+            return Response({
+                'success': True,
+                'message': f'Voucher {voucher.voucher_number} {action} successfully!',
+                'voucher': VoucherSerializer(voucher, context={'request': request}).data
+            }, status=status.HTTP_200_OK if is_edit else status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# === ALL OTHER VIEWS REMAIN 100% UNCHANGED ===
 class AccountDetailListAPI(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -415,125 +540,6 @@ class AccountDetailDeleteAPI(APIView):
             return Response({'message': 'Account deleted successfully'}, status=200)
         except AccountDetail.DoesNotExist:
             return Response({'error': 'Account not found'}, status=404)
-
-
-# CHANGED: Removed AccountantRequiredMixin to allow all authenticated users
-class VoucherCreateAPI(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        data = request.POST.copy()
-        files = request.FILES
-
-        particulars = []
-        i = 0
-        while f'particulars[{i}][description]' in data:
-            desc = data.get(f'particulars[{i}][description]', '').strip()
-            amt = data.get(f'particulars[{i}][amount]', '').strip()
-            file_key = f'particulars[{i}][attachment]'
-            attachment = files.get(file_key)
-
-            if desc and amt:
-                try:
-                    amount = Decimal(amt)
-                    if amount <= 0:
-                        return Response(
-                            {'particulars': f'Amount must be > 0 for item {i+1}'},
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
-                except InvalidOperation:
-                    return Response(
-                        {'particulars': f'Invalid amount for item {i+1}'},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-
-                # PARTICULARS ATTACHMENT REQUIRED
-                if not attachment:
-                    return Response(
-                        {'particulars': f'Attachment is required for particular {i+1}'},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-
-                particulars.append({
-                    'description': desc,
-                    'amount': amount,
-                    'attachment': attachment
-                })
-            i += 1
-
-        if not particulars:
-            return Response(
-                {'particulars': 'At least one particular is required.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # MAIN ATTACHMENT → OPTIONAL (REMOVED REQUIRED CHECK)
-        # No validation here — serializer handles allow_null=True
-
-        payment_type = data.get('payment_type')
-        cheque_number = None
-        cheque_date = None
-        cheque_attachment = None
-        account_details_id = None
-
-        if payment_type == 'CHEQUE':
-            cheque_number = data.get('cheque_number', '').strip()
-            cheque_date_str = data.get('cheque_date', '').strip()
-            cheque_attachment = files.get('cheque_attachment')
-            account_details_id = data.get('account_details', '').strip()
-
-            if not cheque_number:
-                return Response({'error': 'Cheque number is required.'}, status=400)
-            if not cheque_date_str:
-                return Response({'error': 'Cheque date is required for Cheque payments.'}, status=400)
-            if not cheque_attachment:
-                return Response({'error': 'Cheque attachment is required.'}, status=400)
-            if not account_details_id:
-                return Response({'error': 'Account Details is required for Cheque payments.'}, status=400)
-
-            try:
-                cheque_date = datetime.strptime(cheque_date_str, '%Y-%m-%d').date()
-            except ValueError:
-                return Response({'error': 'Invalid cheque date format. Use YYYY-MM-DD.'}, status=400)
-
-            try:
-                AccountDetail.objects.get(pk=account_details_id)
-            except AccountDetail.DoesNotExist:
-                return Response({'error': 'Invalid account selected.'}, status=400)
-        else:
-            data.pop('cheque_number', None)
-            data.pop('cheque_date', None)
-            data.pop('cheque_attachment', None)
-            data.pop('account_details', None)
-
-        serializer_data = {
-            'voucher_date': data.get('voucher_date'),
-            'payment_type': payment_type,
-            'name_title': data.get('name_title'),
-            'pay_to': data.get('pay_to'),
-            'cheque_number': cheque_number,
-            'cheque_date': cheque_date,
-            'account_details': account_details_id if account_details_id else None,
-            'attachment': files.get('attachment'),  # ← Optional, can be None
-            'particulars': particulars
-        }
-
-        if payment_type == 'CHEQUE':
-            serializer_data['cheque_attachment'] = cheque_attachment
-
-        serializer = VoucherSerializer(data=serializer_data, context={
-            'request': request,
-            'files': files
-        })
-        if serializer.is_valid():
-            voucher = serializer.save(created_by=request.user)
-            return Response({
-                'success': True,
-                'message': f'Voucher {voucher.voucher_number} created successfully!',
-                'voucher': serializer.data
-            }, status=status.HTTP_201_CREATED)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class VoucherApprovalAPI(AdminStaffRequiredMixin, APIView):
@@ -654,7 +660,7 @@ class VoucherApprovalAPI(AdminStaffRequiredMixin, APIView):
         )
 
 
-# Remaining APIs (100% unchanged)
+# === ALL OTHER APIs BELOW ARE 100% UNCHANGED ===
 class DesignationCreateAPI(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -841,14 +847,13 @@ class UserUpdateAPI(APIView):
             profile.designation = None
 
         if signature:
-            profile.signature = signature  # ← Fixed typo
+            profile.signature = signature
 
         profile.save()
 
         return Response({'message': 'User updated successfully'}, status=status.HTTP_200_OK)
 
 
-# === FIXED: COMPANY DETAILS API (SUPER ADMIN ONLY) ===
 class CompanyDetailAPI(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -868,13 +873,12 @@ class CompanyDetailAPI(APIView):
         data = request.POST.copy()
         files = request.FILES
 
-        # Explicitly set fields from form data
         company.name = data.get('name', company.name).strip()
         company.gst_no = data.get('gst_no', company.gst_no or '').strip()
         company.pan_no = data.get('pan_no', company.pan_no or '').strip()
         company.address = data.get('address', company.address or '').strip()
-        company.email = data.get('email', company.email or '').strip()    # ← SAVE EMAIL
-        company.phone = data.get('phone', company.phone or '').strip()    # ← SAVE PHONE
+        company.email = data.get('email', company.email or '').strip()
+        company.phone = data.get('phone', company.phone or '').strip()
 
         if 'logo' in files:
             company.logo = files['logo']
