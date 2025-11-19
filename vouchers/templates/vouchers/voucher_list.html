@@ -89,23 +89,24 @@
                         <a href="{% url 'voucher_detail' voucher.id %}"
                            class="btn btn-info btn-sm">View</a>
 
-                        {% if user.groups.all.0.name == 'Admin Staff' and voucher.status == 'PENDING' %}
+                        {% if user.groups.all.0.name == 'Accountants' or user.groups.all.0.name == 'Admin Staff' or user.is_superuser  and voucher.status == 'PENDING' %}
                             {% if voucher.user_approval %}
                                 {% if voucher.user_approval.status == 'APPROVED' %}
                                     <span class="badge bg-success">Approved</span>
-                                {% else %}
+                                {% elif voucher.user_approval.status == 'REJECTED' %}
                                     <span class="badge bg-danger">Rejected</span>
                                 {% endif %}
                             {% else %}
-                                {% if voucher.can_approve %}
+                                {% if voucher.status == 'PENDING' and voucher.can_approve %}
                                     <button class="btn btn-success btn-sm approve-btn"
                                             data-id="{{ voucher.id }}" data-status="APPROVED">Approve</button>
                                     <button class="btn btn-danger btn-sm approve-btn"
                                             data-id="{{ voucher.id }}" data-status="REJECTED">Reject</button>
-                                {% else %}
+                                {% elif voucher.status == 'PENDING' and not voucher.can_approve%}
                                     <div class="text-muted small">
                                         Waiting for <strong>{{ voucher.waiting_for_username }}</strong>
                                     </div>
+                                
                                 {% endif %}
                             {% endif %}
                         {% endif %}
@@ -126,6 +127,11 @@
                     <td colspan="6" class="text-center text-muted py-4">
                         <em>No pending vouchers.</em>
                     </td>
+                </tr>
+
+                <!-- REUSABLE "NO VOUCHERS" ROW (FIXED DUPLICATE BUG) -->
+                <tr id="no-vouchers-dynamic" class="d-none">
+                    <td colspan="6" class="text-center text-muted py-4">No vouchers found.</td>
                 </tr>
 
                 <!-- NO VOUCHERS AT ALL -->
@@ -249,24 +255,22 @@ document.addEventListener('DOMContentLoaded', function () {
     const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
     const tbody = document.getElementById('voucher-tbody');
     const noPendingRow = document.getElementById('no-pending-row');
-    const noVouchersRow = document.getElementById('no-vouchers-row');
+    const dynamicEmptyRow = document.getElementById('no-vouchers-dynamic');  // ← NEW: single reusable row
 
-    // === HELPER: UPDATE EMPTY STATES ===
+    // === HELPER: UPDATE EMPTY STATES (FIXED - NO MORE DUPLICATES) ===
     function updateEmptyStates() {
         const visibleRows = Array.from(document.querySelectorAll('.voucher-row'))
                               .filter(r => r.style.display !== 'none');
 
         noPendingRow.classList.add('d-none');
-        if (noVouchersRow) noVouchersRow.classList.add('d-none');
+        if (dynamicEmptyRow) dynamicEmptyRow.classList.add('d-none');
 
         if (visibleRows.length === 0) {
             const activeStatus = document.querySelector('.filter-btn.active').dataset.status;
             if (activeStatus === 'PENDING') {
                 noPendingRow.classList.remove('d-none');
-            } else if (!noVouchersRow) {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `<td colspan="6" class="text-center text-muted py-4">No vouchers found.</td>`;
-                tbody.appendChild(tr);
+            } else if (dynamicEmptyRow) {
+                dynamicEmptyRow.classList.remove('d-none');
             }
         }
     }
@@ -374,7 +378,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 const modal = document.getElementById(`approvalModal${id}`);
                 if (modal) {
-                    // Update Approved
                     const approvedList = modal.querySelector(`#approved-list-${id}`);
                     approvedList.innerHTML = '';
                     data.approvals.filter(a => a.status === 'APPROVED').forEach(a => {
@@ -387,7 +390,6 @@ document.addEventListener('DOMContentLoaded', function () {
                         approvedList.innerHTML = '<li class="list-group-item text-muted">None</li>';
                     }
 
-                    // Update Rejected (NO REASON HERE)
                     const rejectedList = modal.querySelector(`#rejected-list-${id}`);
                     rejectedList.innerHTML = '';
                     data.approvals.filter(a => a.status === 'REJECTED').forEach(a => {
@@ -400,7 +402,6 @@ document.addEventListener('DOMContentLoaded', function () {
                         rejectedList.innerHTML = '<li class="list-group-item text-muted">None</li>';
                     }
 
-                    // Update Pending
                     const pendingList = modal.querySelector(`#pending-list-${id}`);
                     pendingList.innerHTML = '';
                     const approvedUsernames = data.approvals.filter(a => a.status === 'APPROVED').map(a => a.approver);
@@ -418,7 +419,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
                     modal.querySelector(`#pending-count-${id}`).textContent = data.required_approvers.length - data.approved_count;
 
-                    // Update Rejection Reason Box (SEPARATE)
                     const reasonBox = modal.querySelector('.border.rounded.bg-light');
                     if (data.status === 'REJECTED') {
                         const firstReject = data.approvals.find(a => a.status === 'REJECTED');
@@ -427,15 +427,9 @@ document.addEventListener('DOMContentLoaded', function () {
                                 const box = document.createElement('div');
                                 box.className = 'mt-4 p-3 bg-light border rounded';
                                 box.innerHTML = `
-                                    <h6 class="text-danger mb-2">
-                                        Rejection Reason
-                                    </h6>
-                                    <p class="mb-0 text-danger fw-medium">
-                                        "${firstReject.rejection_reason}"
-                                    </p>
-                                    <small class="text-muted">
-                                        by ${firstReject.approver} on ${firstReject.approved_at}
-                                    </small>
+                                    <h6 class="text-danger mb-2">Rejection Reason</h6>
+                                    <p class="mb-0 text-danger fw-medium">"${firstReject.rejection_reason}"</p>
+                                    <small class="text-muted">by ${firstReject.approver} on ${firstReject.approved_at}</small>
                                 `;
                                 modal.querySelector('.modal-body').appendChild(box);
                             } else {
@@ -448,8 +442,26 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                 }
 
+                // FIXED VISIBILITY LOGIC + FLASH EFFECT
                 const activeStatus = document.querySelector('.filter-btn.active').dataset.status;
-                row.style.display = (row.dataset.status === activeStatus) ? '' : 'none';
+
+                if (activeStatus === 'PENDING') {
+                    row.style.display = '';
+                } else {
+                    row.style.display = (row.dataset.status === activeStatus) ? '' : 'none';
+                }
+
+                row.style.transition = 'background-color 0.8s';
+                if (data.status === 'APPROVED') {
+                    row.style.backgroundColor = '#d4edda';
+                } else if (data.status === 'REJECTED') {
+                    row.style.backgroundColor = '#f8d7da';
+                } else {
+                    row.style.backgroundColor = '#fff3cd';
+                }
+                setTimeout(() => {
+                    row.style.backgroundColor = '';
+                }, 1600);
 
                 updateEmptyStates();
             })

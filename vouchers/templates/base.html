@@ -76,26 +76,7 @@
             {% endfor %}
         </div>
     {% endif %}
-    <!-- SUPER ADMIN CONTROL PANEL (MIDDLE BUTTONS) -->
-    {% if user.is_superuser %}
-    <div class="container mt-4">
-        <!-- CONTROL BUTTONS -->
-        <div class="d-grid gap-2 d-md-flex justify-content-md-center">
-            <button type="button" class="btn btn-success btn-lg px-5" data-bs-toggle="modal" data-bs-target="#createUserModal">
-                Create User
-            </button>
-            <button type="button" class="btn btn-info btn-lg px-5 text-white" data-bs-toggle="modal" data-bs-target="#createDesignationModal">
-                Create Designation
-            </button>
-            <button type="button" class="btn btn-warning btn-lg px-5 text-dark" data-bs-toggle="modal" data-bs-target="#accountControlModal">
-                Manage Bank Accounts
-            </button>
-            <button type="button" class="btn btn-secondary btn-lg px-5" data-bs-toggle="modal" data-bs-target="#companyDetailsModal">
-                View / Edit Company Details
-            </button>
-        </div>
-    </div>
-    {% endif %}
+    
     <!-- (Buttons removed as requested) -->
     <div class="container mt-4">{% block content %}{% endblock %}</div>
     <!-- LOGOUT MODAL -->
@@ -353,6 +334,7 @@
         </div>
     </div>
     {% endif %}
+    
     <!-- NEW: ACCOUNT CONTROL MODAL (SUPERUSER ONLY) -->
     {% if user.is_superuser %}
     <div class="modal fade" id="accountControlModal" tabindex="-1">
@@ -1112,6 +1094,19 @@
             };
         }
     });
+    // Fix: Show designation field when changing group in Edit User modal
+document.getElementById('edit_user_group')?.addEventListener('change', function () {
+    const desField = document.getElementById('edit_designation_field');
+    const desSelect = document.getElementById('edit_user_designation');
+    if (this.value === 'Admin Staff') {
+        desField.style.display = 'block';
+        desSelect.setAttribute('required', 'required');
+    } else {
+        desField.style.display = 'none';
+        desSelect.removeAttribute('required');
+        desSelect.value = '';
+    }
+});
     </script>
     {% block extra_js %}{% endblock %}
 </body>

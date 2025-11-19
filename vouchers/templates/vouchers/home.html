@@ -54,7 +54,25 @@
                 User Control
             </button>
         </div>
-        {% endif %}
+       
+    <div class="container mt-4">
+        <!-- CONTROL BUTTONS -->
+        <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+            <button type="button" class="btn btn-success btn-lg px-5" data-bs-toggle="modal" data-bs-target="#createUserModal">
+                Create User
+            </button>
+            <button type="button" class="btn btn-info btn-lg px-5 text-white" data-bs-toggle="modal" data-bs-target="#createDesignationModal">
+                Create Designation
+            </button>
+            <button type="button" class="btn btn-warning btn-lg px-5 text-dark" data-bs-toggle="modal" data-bs-target="#accountControlModal">
+                Manage Bank Accounts
+            </button>
+            <button type="button" class="btn btn-secondary btn-lg px-5" data-bs-toggle="modal" data-bs-target="#companyDetailsModal">
+                View / Edit Company Details
+            </button>
+        </div>
+    </div>
+    {% endif %}
 
     </div>
 </div>
