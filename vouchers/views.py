@@ -71,7 +71,10 @@ class HomeView(TemplateView):
 
         if user.is_superuser:
             context['all_users'] = User.objects.select_related('userprofile__designation').all()
-            context['company'] = CompanyDetail.load()
+            company = CompanyDetail.load()
+            context['company'] = company
+            # ADDED: Pass company logo URL for dashboard icon
+            context['company_logo_url'] = company.logo.url if company.logo else None
 
         return context
 

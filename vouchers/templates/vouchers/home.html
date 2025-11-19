@@ -2,79 +2,237 @@
 {% load static %}
 
 {% block content %}
-{% if not user.is_authenticated %}
-<div class="d-flex justify-content-center align-items-center min-vh-100">
-    <a href="{% url 'login' %}" class="btn btn-primary btn-lg px-5 py-3 shadow-lg">
-        Login
-    </a>
-</div>
-{% else %}
-<div class="container mt-5">
-    <div class="text-center">
-
-        <!-- MAIN BUTTONS -->
-        <div class="mb-4 d-flex justify-content-center gap-3 flex-wrap">
-
-            <!-- View Vouchers (for all authenticated users) -->
-            <a href="{% url 'voucher_list' %}" class="btn btn-primary btn-lg px-5 shadow-sm">
-                View Vouchers
+    {% if not user.is_authenticated %}
+        <div class="d-flex justify-content-center align-items-center min-vh-100">
+            <a href="{% url 'login' %}" class="btn btn-primary btn-lg px-5 py-3 shadow-lg">
+                Login
             </a>
+        </div>
+    {% else %}
+        <div class="container mt-5">
+            <div class="text-center">
 
-            <!-- Create Voucher (Accountants + Admin Staff + Superuser) -->
-            {% if user.groups.all.0.name == 'Accountants' or user.groups.all.0.name == 'Admin Staff' or user.is_superuser %}
-            <button class="btn btn-success btn-lg px-5 shadow-sm"
-                    data-bs-toggle="modal"
-                    data-bs-target="#createVoucherModal">
-                Create Voucher
-            </button>
-            {% endif %}
-        </div>
+                <!-- MAIN BUTTONS -->
+                <div class="mb-5 d-flex justify-content-center gap-3 flex-wrap">
+                    <a href="{% url 'voucher_list' %}" class="btn btn-primary btn-lg px-5 shadow-sm">
+                        View Vouchers
+                    </a>
 
-        <!-- SUPERUSER-ONLY CONTROL BUTTONS (MOVED FROM BASE) -->
-        {% if is_superuser %}
-        <div class="d-flex justify-content-center gap-3 flex-wrap mt-4">
-            <button class="btn btn-warning btn-lg px-5 shadow-sm" 
-                    data-bs-toggle="modal" 
-                    data-bs-target="#createUserModal">
-                Create User
-            </button>
-            <button class="btn btn-warning btn-lg px-5 shadow-sm" 
-                    data-bs-toggle="modal" 
-                    data-bs-target="#createDesignationModal">
-                Create Designation
-            </button>
-            <button class="btn btn-warning btn-lg px-5 shadow-sm" 
-                    data-bs-toggle="modal" 
-                    data-bs-target="#approvalControlModal">
-                Control Approval
-            </button>
-            <button class="btn btn-info btn-lg px-5 shadow-sm" 
-                    data-bs-toggle="modal" 
-                    data-bs-target="#userControlModal">
-                User Control
-            </button>
+                    {% if user.groups.all.0.name == 'Accountants' or user.groups.all.0.name == 'Admin Staff' or user.is_superuser %}
+                        <button class="btn btn-success btn-lg px-5 shadow-sm"
+                                data-bs-toggle="modal"
+                                data-bs-target="#createVoucherModal">
+                            Create Voucher
+                        </button>
+                    {% endif %}
+                </div>
+
+                <!-- SUPERUSER-ONLY CONTROL PANEL -->
+                {% if user.is_superuser %}
+                    <h4 class="text-muted mb-5">Admin Control Panel</h4>
+
+                    <!-- 4 BOXES -->
+                    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-4 justify-content-center">
+
+                        <!-- Box 1 - User Master -->
+                        <div class="col">
+                            <a href="#" class="text-decoration-none" data-bs-toggle="modal" data-bs-target="#userMasterModal">
+                                <div class="dashboard-box user-master-box">
+                                    <img src="{% static 'images/user.png' %}" alt="User Master" class="box-icon">
+                                    <h5 class="box-title">User Master</h5>
+                                </div>
+                            </a>
+                        </div>
+
+                        <!-- Box 2 - Voucher Master -->
+                        <div class="col">
+                            <a href="#" class="text-decoration-none" data-bs-toggle="modal" data-bs-target="#voucherMasterModal">
+                                <div class="dashboard-box voucher-master-box">
+                                    <img src="{% static 'images/voucher.png' %}" alt="Voucher Master" class="box-icon">
+                                    <h5 class="box-title">Voucher Master</h5>
+                                </div>
+                            </a>
+                        </div>
+
+                        <!-- Box 3 - Approval Control -->
+                        <div class="col">
+                            <a href="#" class="text-decoration-none" data-bs-toggle="modal" data-bs-target="#approvalControlModalBox">
+                                <div class="dashboard-box approval-control-box">
+                                    <img src="{% static 'images/approval.png' %}" alt="Approval Control" class="box-icon">
+                                    <h5 class="box-title">Approval Control</h5>
+                                </div>
+                            </a>
+                        </div>
+
+                        <!-- Box 4 - Company Master -->
+                        <div class="col">
+                            <a href="#" class="text-decoration-none" data-bs-toggle="modal" data-bs-target="#companyMasterModal">
+                                <div class="dashboard-box company-master-box">
+                                    {% if company_logo_url %}
+                                        <img src="{{ company_logo_url }}" alt="Company Logo" class="box-icon">
+                                    {% else %}
+                                        <img src="{% static 'images/company.png' %}" alt="Company" class="box-icon">
+                                    {% endif %}
+                                    <h5 class="box-title">Company Master</h5>
+                                </div>
+                            </a>
+                        </div>
+
+                    </div> <!-- end of row -->
+
+                    <!-- CLEAN POPUP MODALS (All 4) -->
+
+                    <!-- User Master Modal -->
+                    <div class="modal fade" id="userMasterModal" tabindex="-1" aria-labelledby="userMasterModalLabel" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered modal-sm">
+                            <div class="modal-content border-0" style="border-radius: 18px; overflow: hidden;">
+                                <div class="modal-header text-white" style="background: linear-gradient(135deg, #5b3cc4, #3f2ba8);">
+                                    <h5 class="modal-title fw-bold" id="userMasterModalLabel">User Management</h5>
+                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-hidden="true"></button>
+                                </div>
+                                <div class="modal-body py-4">
+                                    <div class="d-grid gap-3">
+                                        <button class="btn btn-outline-primary fw-semibold py-3 rounded-pill"
+                                                data-bs-toggle="modal" data-bs-target="#createUserModal" data-bs-dismiss="modal">
+                                            Create User
+                                        </button>
+                                        <button class="btn btn-outline-primary fw-semibold py-3 rounded-pill"
+                                                data-bs-toggle="modal" data-bs-target="#createDesignationModal" data-bs-dismiss="modal">
+                                            Create Designation
+                                        </button>
+                                        <button class="btn btn-outline-primary fw-semibold py-3 rounded-pill"
+                                                data-bs-toggle="modal" data-bs-target="#userControlModal" data-bs-dismiss="modal">
+                                            User Control
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Voucher Master Modal -->
+                    <div class="modal fade" id="voucherMasterModal" tabindex="-1" aria-labelledby="voucherMasterModalLabel" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered modal-sm">
+                            <div class="modal-content border-0" style="border-radius: 18px; overflow: hidden;">
+                                <div class="modal-header text-white" style="background: linear-gradient(135deg, #5b3cc4, #3f2ba8);">
+                                    <h5 class="modal-title fw-bold" id="voucherMasterModalLabel">Voucher Settings</h5>
+                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-hidden="true"></button>
+                                </div>
+                                <div class="modal-body py-5">
+                                    <div class="d-grid">
+                                        <button class="btn btn-outline-primary fw-semibold py-3 rounded-pill"
+                                                data-bs-toggle="modal" data-bs-target="#accountControlModal" data-bs-dismiss="modal">
+                                            Manage Bank Accounts
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Approval Control Modal -->
+                    <div class="modal fade" id="approvalControlModalBox" tabindex="-1" aria-labelledby="approvalControlModalBoxLabel" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered modal-sm">
+                            <div class="modal-content border-0" style="border-radius: 18px; overflow: hidden;">
+                                <div class="modal-header text-white" style="background: linear-gradient(135deg, #5b3cc4, #3f2ba8);">
+                                    <h5 class="modal-title fw-bold" id="approvalControlModalBoxLabel">Approval Settings</h5>
+                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-hidden="true"></button>
+                                </div>
+                                <div class="modal-body py-5">
+                                    <div class="d-grid">
+                                        <button class="btn btn-outline-primary fw-semibold py-3 rounded-pill"
+                                                data-bs-toggle="modal" data-bs-target="#approvalControlModal" data-bs-dismiss="modal">
+                                            Control Approval
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Company Master Modal -->
+                    <div class="modal fade" id="companyMasterModal" tabindex="-1" aria-labelledby="companyMasterModalLabel" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered modal-sm">
+                            <div class="modal-content border-0" style="border-radius: 18px; overflow: hidden;">
+                                <div class="modal-header text-white" style="background: linear-gradient(135deg, #5b3cc4, #3f2ba8);">
+                                    <h5 class="modal-title fw-bold" id="companyMasterModalLabel">Company Settings</h5>
+                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-hidden="true"></button>
+                                </div>
+                                <div class="modal-body py-5">
+                                    <div class="d-grid">
+                                        <button class="btn btn-outline-primary fw-semibold py-3 rounded-pill"
+                                                data-bs-toggle="modal" data-bs-target="#companyDetailsModal" data-bs-dismiss="modal">
+                                            Company Details
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- DASHBOARD BOXES CSS -->
+                    <style>
+                        .dashboard-box {
+                            background: linear-gradient(135deg, #5b3cc4 0%, #3f2ba8 100%);
+                            border: 1px solid rgba(255, 255, 255, 0.15);
+                            border-radius: 16px;
+                            padding: 1.3rem 0.8rem;
+                            text-align: center;
+                            color: white;
+                            min-height: 102px;
+                            display: flex;
+                            flex-direction: column;
+                            justify-content: center;
+                            align-items: center;
+                            box-shadow: 0 6px 18px rgba(90, 60, 200, 0.25);
+                            transition: all 0.35s ease;
+                            position: relative;
+                            overflow: hidden;
+                        }
+
+                        .dashboard-box::before {
+                            content: '';
+                            position: absolute;
+                            top: 0; left: 0; right: 0; bottom: 0;
+                            background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 60%);
+                            pointer-events: none;
+                        }
+
+                        .dashboard-box:hover {
+                            transform: translateY(-8px) scale(1.05);
+                            box-shadow: 0 16px 32px rgba(90, 60, 200, 0.35);
+                            border-color: rgba(138, 103, 255, 0.7);
+                        }
+
+                        .box-icon {
+                            width: 43px;
+                            height: 43px;
+                            margin-bottom: 8px;
+                            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+                            opacity: 0.95;
+                        }
+
+                        .box-title {
+                            font-weight: 700;
+                            font-size: 0.88rem;
+                            margin: 0;
+                            letter-spacing: 0.3px;
+                            text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+                        }
+
+                        .user-master-box .box-icon { width: 48px; height: 48px; }
+                        .company-master-box .box-icon { 
+                            width: 120px !important; 
+                            height: 44px!important; 
+                            border-radius: 16px; 
+                            background: rgba(255,255,255,0.15); 
+                            padding: 6px; 
+                        }
+                    </style>
+
+                {% endif %} {# end superuser #}
+
+            </div>
         </div>
-       
-    <div class="container mt-4">
-        <!-- CONTROL BUTTONS -->
-        <div class="d-grid gap-2 d-md-flex justify-content-md-center">
-            <button type="button" class="btn btn-success btn-lg px-5" data-bs-toggle="modal" data-bs-target="#createUserModal">
-                Create User
-            </button>
-            <button type="button" class="btn btn-info btn-lg px-5 text-white" data-bs-toggle="modal" data-bs-target="#createDesignationModal">
-                Create Designation
-            </button>
-            <button type="button" class="btn btn-warning btn-lg px-5 text-dark" data-bs-toggle="modal" data-bs-target="#accountControlModal">
-                Manage Bank Accounts
-            </button>
-            <button type="button" class="btn btn-secondary btn-lg px-5" data-bs-toggle="modal" data-bs-target="#companyDetailsModal">
-                View / Edit Company Details
-            </button>
-        </div>
-    </div>
     {% endif %}
-
-    </div>
-</div>
-{% endif %}
 {% endblock %}
