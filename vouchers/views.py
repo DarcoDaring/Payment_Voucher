@@ -11,7 +11,9 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from .models import (
     Voucher, Particular, VoucherApproval, Designation,
-    ApprovalLevel, UserProfile, AccountDetail, CompanyDetail
+    ApprovalLevel, UserProfile, AccountDetail, CompanyDetail,MainAttachment,     
+    ChequeAttachment,  
+    ParticularAttachment 
 )
 from .serializers import VoucherSerializer, VoucherApprovalSerializer, AccountDetailSerializer
 from django.contrib.auth.models import User, Group
@@ -83,7 +85,7 @@ class VoucherListView(LoginRequiredMixin, ListView):
     model = Voucher
     template_name = 'vouchers/voucher_list.html'
     context_object_name = 'vouchers'
-    paginate_by = 10
+    ordering = ['-created_at']
 
     def get_queryset(self):
         qs = super().get_queryset().select_related('created_by')
@@ -357,9 +359,7 @@ class VoucherDetailView(LoginRequiredMixin, DetailView):
         context['company'] = CompanyDetail.load()
 
         return context
-
-
-# === FULLY FIXED VoucherCreateAPI – NOW SUPPORTS BOTH CREATE & EDIT ===
+# === FINAL VOUCHER CREATE/EDIT API – FULLY WORKING EDIT MODE ===
 class VoucherCreateAPI(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -367,133 +367,141 @@ class VoucherCreateAPI(APIView):
         data = request.POST.copy()
         files = request.FILES
 
-        # === Check if this is an EDIT (voucher_id sent from frontend) ===
-        voucher_id = data.get('voucher_id') or request.data.get('voucher_id')
+        voucher_id = data.get('voucher_id')
         is_edit = bool(voucher_id)
 
-        particulars = []
-        i = 0
-        while f'particulars[{i}][description]' in data:
-            desc = data.get(f'particulars[{i}][description]', '').strip()
-            amt = data.get(f'particulars[{i}][amount]', '').strip()
-            file_key = f'particulars[{i}][attachment]'
-            attachment = files.get(file_key)
-
-            if desc and amt:
-                try:
-                    amount = Decimal(amt)
-                    if amount <= 0:
-                        return Response(
-                            {'particulars': f'Amount must be > 0 for item {i+1}'},
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
-                except InvalidOperation:
-                    return Response(
-                        {'particulars': f'Invalid amount for item {i+1}'},
-                        status=status.HTTP_400_BAD_REQUEST
+        try:
+            with transaction.atomic():
+                # -------------------------------------------------
+                # 1. Get or create the voucher
+                # -------------------------------------------------
+                if is_edit:
+                    voucher = Voucher.objects.select_for_update().get(
+                        id=voucher_id,
+                        created_by=request.user,
+                        status='PENDING',
+                        approvals__isnull=True  # only editable if no one approved yet
                     )
+                else:
+                    voucher = Voucher(created_by=request.user)
 
-                if not attachment and not is_edit:  # Allow skipping attachment on edit
-                    return Response(
-                        {'particulars': f'Attachment is required for particular {i+1}'},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+                # Basic fields
+                voucher.voucher_date = data['voucher_date']
+                voucher.payment_type = data['payment_type']
+                voucher.name_title = data['name_title']
+                voucher.pay_to = data['pay_to']
 
-                particulars.append({
-                    'description': desc,
-                    'amount': amount,
-                    'attachment': attachment
-                })
-            i += 1
+                # Cheque fields
+                if data['payment_type'] == 'CHEQUE':
+                    voucher.cheque_number = data.get('cheque_number', '').strip()
+                    voucher.cheque_date = data.get('cheque_date') or None
+                    voucher.account_details_id = data.get('account_details') or None
 
-        if not particulars:
-            return Response(
-                {'particulars': 'At least one particular is required.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+                    if not voucher.cheque_number:
+                        return Response({'error': 'Cheque number is required.'}, status=400)
+                    if not voucher.cheque_date:
+                        return Response({'error': 'Cheque date is required.'}, status=400)
+                    if not voucher.account_details:
+                        return Response({'error': 'Account Details is required.'}, status=400)
+                else:
+                    voucher.cheque_number = voucher.cheque_date = voucher.account_details = None
 
-        payment_type = data.get('payment_type')
-        cheque_number = None
-        cheque_date = None
-        cheque_attachment = None
-        account_details_id = None
+                voucher.save()  # generates voucher_number on create
 
-        if payment_type == 'CHEQUE':
-            cheque_number = data.get('cheque_number', '').strip()
-            cheque_date_str = data.get('cheque_date', '').strip()
-            cheque_attachment = files.get('cheque_attachment')
-            account_details_id = data.get('account_details', '').strip()
+                # -------------------------------------------------
+                # 2. Main attachments (multiple, optional)
+                # -------------------------------------------------
+                if not is_edit:
+                    MainAttachment.objects.filter(voucher=voucher).delete()
+                for f in files.getlist('main_attachments'):
+                    MainAttachment.objects.create(voucher=voucher, file=f)
 
-            if not cheque_number:
-                return Response({'error': 'Cheque number is required.'}, status=400)
-            if not cheque_date_str:
-                return Response({'error': 'Cheque date is required for Cheque payments.'}, status=400)
-            if not cheque_attachment and not is_edit:
-                return Response({'error': 'Cheque attachment is required.'}, status=400)
-            if not account_details_id:
-                return Response({'error': 'Account Details is required for Cheque payments.'}, status=400)
+                # -------------------------------------------------
+                # 3. Cheque attachments (multiple, required only for CHEQUE)
+                # -------------------------------------------------
+                if data['payment_type'] == 'CHEQUE':
+                    if not is_edit:
+                        ChequeAttachment.objects.filter(voucher=voucher).delete()
+                    cheque_files = files.getlist('cheque_attachments')
+                    if not cheque_files and not is_edit:
+                        return Response({'error': 'At least one cheque attachment is required.'}, status=400)
+                    for f in cheque_files:
+                        ChequeAttachment.objects.create(voucher=voucher, file=f)
+                else:
+                    ChequeAttachment.objects.filter(voucher=voucher).delete()
 
-            try:
-                cheque_date = datetime.strptime(cheque_date_str, '%Y-%m-%d').date()
-            except ValueError:
-                return Response({'error': 'Invalid cheque date format. Use YYYY-MM-DD.'}, status=400)
+                # -------------------------------------------------
+                # 4. Particulars + attachments (the big fix!)
+                # -------------------------------------------------
+                # On create: delete old particulars
+                if not is_edit:
+                    voucher.particulars.all().delete()
 
-            try:
-                AccountDetail.objects.get(pk=account_details_id)
-            except AccountDetail.DoesNotExist:
-                return Response({'error': 'Invalid account selected.'}, status=400)
-        else:
-            data.pop('cheque_number', None)
-            data.pop('cheque_date', None)
-            data.pop('cheque_attachment', None)
-            data.pop('account_details', None)
+                i = 0
+                while f"particulars[{i}][description]" in data:
+                    desc = data[f"particulars[{i}][description]"].strip()
+                    amt_str = data[f"particulars[{i}][amount]"].strip()
 
-        serializer_data = {
-            'voucher_date': data.get('voucher_date'),
-            'payment_type': payment_type,
-            'name_title': data.get('name_title'),
-            'pay_to': data.get('pay_to'),
-            'cheque_number': cheque_number,
-            'cheque_date': cheque_date,
-            'account_details': account_details_id if account_details_id else None,
-            'attachment': files.get('attachment'),
-            'particulars': particulars
-        }
+                    if not desc or not amt_str:
+                        i += 1
+                        continue
 
-        if payment_type == 'CHEQUE':
-            serializer_data['cheque_attachment'] = cheque_attachment
+                    try:
+                        amount = Decimal(amt_str)
+                        if amount <= 0:
+                            return Response({f'particular_{i}': 'Amount must be > 0'}, status=400)
+                    except InvalidOperation:
+                        return Response({f'particular_{i}': 'Invalid amount'}, status=400)
 
-        # === EDIT MODE: Update existing voucher ===
-        if is_edit:
-            try:
-                voucher = Voucher.objects.get(
-                    id=voucher_id,
-                    created_by=request.user,
-                    status='PENDING',
-                    approvals__isnull=True  # No approvals yet
-                )
-            except Voucher.DoesNotExist:
-                return Response(
-                    {'error': 'Voucher not found or cannot be edited (already approved/rejected).'},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            serializer = VoucherSerializer(voucher, data=serializer_data, partial=True, context={'request': request, 'files': files})
-        else:
-            serializer = VoucherSerializer(data=serializer_data, context={'request': request, 'files': files})
+                    # On edit: try to update existing particular, otherwise create new
+                    if is_edit and i < voucher.particulars.count():
+                        particular = voucher.particulars.all()[i]
+                        particular.description = desc
+                        particular.amount = amount
+                    else:
+                        particular = Particular(voucher=voucher, description=desc, amount=amount)
 
-        if serializer.is_valid():
-            voucher = serializer.save(created_by=request.user if not is_edit else voucher.created_by)
-            action = "updated" if is_edit else "created"
-            return Response({
-                'success': True,
-                'message': f'Voucher {voucher.voucher_number} {action} successfully!',
-                'voucher': VoucherSerializer(voucher, context={'request': request}).data
-            }, status=status.HTTP_200_OK if is_edit else status.HTTP_201_CREATED)
+                    particular.save()
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                    # ---- Attachments handling (KEY FIX) ----
+                    new_files = files.getlist(f'particular_attachment_{i}')
 
+                    if new_files:
+                        # User uploaded new files → replace old ones
+                        particular.attachments.all().delete()
+                        for f in new_files:
+                            ParticularAttachment.objects.create(particular=particular, file=f)
+                    else:
+                        # No new files uploaded
+                        if not is_edit and not particular.attachments.exists():
+                            # Only on CREATE we require at least one attachment
+                            return Response(
+                                {f'particular_{i}': 'At least one attachment required'},
+                                status=400
+                            )
+                        # On EDIT: keep existing attachments if user didn't upload new ones → PERFECT!
 
-# === ALL OTHER VIEWS REMAIN 100% UNCHANGED ===
+                    i += 1
+
+                if voucher.particulars.count() == 0:
+                    return Response({'error': 'At least one particular is required.'}, status=400)
+
+                action = "updated" if is_edit else "created"
+                return Response({
+                    'success': True,
+                    'message': f'Voucher {voucher.voucher_number} {action} successfully!',
+                    'voucher': {
+                        'id': voucher.id,
+                        'voucher_number': voucher.voucher_number
+                    }
+                }, status=200 if is_edit else 201)
+
+        except Voucher.DoesNotExist:
+            return Response({'error': 'Voucher not found or cannot be edited.'}, status=404)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response({'error': str(e)}, status=500)
 class AccountDetailListAPI(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -715,6 +723,7 @@ class ApprovalControlAPI(APIView):
             return Response({'error': 'levels must be a list'}, status=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
+            # 1. Save new workflow
             ApprovalLevel.objects.all().delete()
             for idx, item in enumerate(levels_data):
                 des_id = item.get('id')
@@ -732,9 +741,35 @@ class ApprovalControlAPI(APIView):
                 except Designation.DoesNotExist:
                     pass
 
-        return Response({'message': 'Approval order saved.'}, status=status.HTTP_200_OK)
+            # 2. RECALCULATE ALL EXISTING VOUCHERS (THIS FIXES YOUR PROBLEM)
+            current_required_designation_ids = list(
+                ApprovalLevel.objects
+                .filter(is_active=True)
+                .order_by('order')
+                .values_list('designation_id', flat=True)
+            )
 
+            vouchers_to_check = Voucher.objects.filter(status__in=['PENDING', 'APPROVED'])
 
+            for voucher in vouchers_to_check:
+                approved_count = VoucherApproval.objects.filter(
+                    voucher=voucher,
+                    status='APPROVED',
+                    approver__userprofile__designation_id__in=current_required_designation_ids
+                ).values('approver__userprofile__designation_id').distinct().count()
+
+                required_count = len(current_required_designation_ids)
+
+                if required_count > 0 and approved_count >= required_count:
+                    voucher.status = 'APPROVED'
+                    voucher.save(update_fields=['status'])
+                elif required_count == 0:
+                    voucher.status = 'APPROVED'
+                    voucher.save(update_fields=['status'])
+
+        return Response({
+            'message': 'Approval workflow updated and all vouchers recalculated!'
+        }, status=status.HTTP_200_OK)
 class UserCreateAPI(APIView):
     permission_classes = [IsAuthenticated]
 

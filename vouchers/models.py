@@ -42,8 +42,8 @@ class Voucher(models.Model):
     name_title = models.CharField(max_length=5, choices=[('MR', 'Mr.'), ('MRS', 'Mrs.'), ('MS', 'Ms.')])
     pay_to = models.CharField(max_length=200)
     
-    # MAIN ATTACHMENT → OPTIONAL
-    attachment = models.FileField(upload_to='vouchers/attachments/', null=True, blank=True)
+    # REMOVED: Old single main attachment (now using MainAttachment model below)
+    # attachment = models.FileField(upload_to='vouchers/attachments/', null=True, blank=True)
 
     # CHEQUE FIELDS
     cheque_number = models.CharField(
@@ -53,12 +53,8 @@ class Voucher(models.Model):
         help_text="Required only for Cheque payments"
     )
 
-    cheque_attachment = models.FileField(
-        upload_to='vouchers/cheques/',
-        null=True,
-        blank=True,
-        help_text="Required only for Cheque payments"
-    )
+    # REMOVED: Old single cheque attachment (now using ChequeAttachment model below)
+    # cheque_attachment = models.FileField(upload_to='vouchers/cheques/', null=True, blank=True)
 
     cheque_date = models.DateField(
         null=True,
@@ -154,8 +150,8 @@ class Voucher(models.Model):
         if self.payment_type == 'CHEQUE':
             if not self.cheque_number:
                 raise ValidationError("Cheque number is required for Cheque payments.")
-            if not self.cheque_attachment:
-                raise ValidationError("Cheque attachment is required for Cheque payments.")
+            if not self.cheque_attachments.exists():  # Now checks related objects
+                raise ValidationError("At least one cheque attachment is required for Cheque payments.")
             if not self.cheque_date:
                 raise ValidationError("Cheque date is required for Cheque payments.")
             if not self.account_details:
@@ -163,7 +159,6 @@ class Voucher(models.Model):
         else:
             # Clear cheque fields if not CHEQUE
             self.cheque_number = None
-            self.cheque_attachment = None
             self.cheque_date = None
             self.account_details = None
 
@@ -173,19 +168,16 @@ class Particular(models.Model):
     description = models.CharField(max_length=300)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     
-    # PARTICULARS ATTACHMENT → REQUIRED
-    attachment = models.FileField(
-        upload_to='vouchers/particulars/',
-        help_text="Attach receipt/invoice for this item - REQUIRED"
-    )
+    # REMOVED: Old single attachment (now using ParticularAttachment model below)
+    # attachment = models.FileField(upload_to='vouchers/particulars/', help_text="...")
 
     def __str__(self):
         return f"{self.description} - {self.amount}"
 
     def clean(self):
         from django.core.exceptions import ValidationError
-        if not self.attachment:
-            raise ValidationError("Attachment is required for each particular.")
+        if not self.attachments.exists():  # Now checks multiple attachments
+            raise ValidationError("At least one attachment is required for each particular.")
 
 
 class VoucherApproval(models.Model):
@@ -235,6 +227,7 @@ class AccountDetail(models.Model):
 # === NEW: COMPANY DETAIL (SINGLETON - ONLY ONE RECORD) ===
 class CompanyDetail(models.Model):
     """
+    matedocstring
     Singleton model: Only ONE company detail exists at a time.
     Used for: Company Name, GST, PAN, Address, Logo, Email, Phone.
     """
@@ -242,8 +235,8 @@ class CompanyDetail(models.Model):
     gst_no = models.CharField(max_length=20, blank=True, null=True, help_text="GST Number (e.g., 22AAAAA0000A1Z5)")
     pan_no = models.CharField(max_length=15, blank=True, null=True, help_text="PAN Number (e.g., AAAAA0000A)")
     address = models.TextField(blank=True, null=True, help_text="Full company address")
-    email = models.EmailField(blank=True, null=True, help_text="Company email address")   # <-- ADDED
-    phone = models.CharField(max_length=20, blank=True, null=True, help_text="Company phone number")   # <-- ADDED
+    email = models.EmailField(blank=True, null=True, help_text="Company email address")
+    phone = models.CharField(max_length=20, blank=True, null=True, help_text="Company phone number")
     logo = models.ImageField(
         upload_to='company/logo/',
         null=True,
@@ -267,18 +260,42 @@ class CompanyDetail(models.Model):
         return self.name or "Company"
 
     def save(self, *args, **kwargs):
-        """
-        Enforce singleton: Only one CompanyDetail instance allowed.
-        """
-        self.pk = 1  # Force ID = 1
+        self.pk = 1
         super().save(*args, **kwargs)
-        # Delete any duplicates
         CompanyDetail.objects.exclude(pk=1).delete()
 
     @classmethod
     def load(cls):
-        """
-        Get the single instance (like a singleton).
-        """
         obj, created = cls.objects.get_or_create(pk=1)
         return obj
+
+
+# =============================================
+# NEW MODELS FOR MULTIPLE FILE UPLOADS
+# =============================================
+
+class MainAttachment(models.Model):
+    voucher = models.ForeignKey(Voucher, on_delete=models.CASCADE, related_name='main_attachments')
+    file = models.FileField(upload_to='vouchers/main/')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return os.path.basename(self.file.name)
+
+
+class ChequeAttachment(models.Model):
+    voucher = models.ForeignKey(Voucher, on_delete=models.CASCADE, related_name='cheque_attachments')
+    file = models.FileField(upload_to='vouchers/cheques/')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return os.path.basename(self.file.name)
+
+
+class ParticularAttachment(models.Model):
+    particular = models.ForeignKey(Particular, on_delete=models.CASCADE, related_name='attachments')
+    file = models.FileField(upload_to='vouchers/particulars/')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return os.path.basename(self.file.name)

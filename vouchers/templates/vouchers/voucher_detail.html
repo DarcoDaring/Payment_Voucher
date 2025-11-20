@@ -60,30 +60,40 @@
                                 {% endif %}
                             </div>
 
-                            <!-- CHEQUE ATTACHMENT: View Button (Next Line) -->
-                            {% if voucher.payment_type == 'CHEQUE' and voucher.cheque_attachment %}
-                                <div class="mt-2">
-                                    {% with filename=voucher.cheque_attachment.name|lower %}
-                                        {% if filename|slice:"-4:" in '.jpg,.png,.jpeg,.gif,.webp,.bmp,.svg' or filename|slice:"-5:" in '.jpeg' %}
-                                            <button type="button" class="btn btn-sm btn-outline-primary view-attachment-btn"
-                                                    data-url="{{ voucher.cheque_attachment.url }}"
-                                                    data-filename="Cheque_{{ voucher.voucher_number }}_{{ voucher.cheque_attachment.name|cut:'vouchers/cheques/'|filename }}">
-                                                View Cheque
-                                            </button>
-                                        {% else %}
-                                            <a href="{{ voucher.cheque_attachment.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
-                                                View Cheque <i class="bi bi-box-arrow-up-right"></i>
-                                            </a>
-                                        {% endif %}
-                                    {% endwith %}
+                            <!-- CHEQUE ATTACHMENTS - MULTIPLE (REPLACES OLD SINGLE FIELD) -->
+                            {% if voucher.cheque_attachments.exists %}
+                            <div class="mb-4">
+                                <div class="d-flex align-items-center gap-3 flex-wrap">
+                                    <strong class="text-primary">Cheque Attachment{{ voucher.cheque_attachments.count|pluralize }}</strong>
+                                    {% for att in voucher.cheque_attachments.all %}
+    {% with ext=att.file.name|lower|split:"."|last %}
+        {% if ext in "jpg,jpeg,png,gif,webp,bmp,svg,tif,tiff" %}
+            <button type="button" class="btn btn-sm btn-outline-primary view-attachment-btn"
+                                                            data-url="{{ att.file.url }}"
+                                                            data-filename="{{ att.file.name|filename }}">
+                                                        View
+                                                    </button>
+        {% else %}
+            <a href="{{ att.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary me-2 mb-2">
+                Open File
+            </a>
+        {% endif %}
+    {% endwith %}
+{% endfor %}
+                                    {% if voucher.cheque_attachments.count > 3 %}
+                                        <span class="badge bg-light text-dark border small">
+                                            +{{ voucher.cheque_attachments.count|add:"-3" }} more
+                                        </span>
+                                    {% endif %}
                                 </div>
-                            {% elif voucher.payment_type == 'CHEQUE' and not voucher.cheque_attachment %}
-                                <small class="text-warning d-block mt-2">Cheque attachment missing</small>
+                            </div>
+                            {% elif voucher.payment_type == 'CHEQUE' %}
+                            <small class="text-warning d-block">Warning: Cheque attachment missing</small>
                             {% endif %}
-                        </div>
 
-                        <!-- RIGHT: EMPTY -->
-                        <div></div>
+                            <!-- RIGHT: EMPTY -->
+                            <div></div>
+                        </div>
                     </div>
                 </div>
 
@@ -93,27 +103,36 @@
                     <h4 class="text-primary fw-bold mb-0">{{ voucher.name_title }} {{ voucher.pay_to }}</h4>
                 </div>
 
-                <!-- MAIN ATTACHMENT – NOW JUST BELOW PAY TO (AS REQUESTED) -->
-                {% if voucher.attachment %}
-                <div class="mb-4 p-3 bg-light rounded border">
-                    <strong class="d-block mb-2">Main Attachment</strong>
-                    {% with filename=voucher.attachment.name|lower %}
-                        {% if filename|slice:"-4:" in '.jpg,.png,.jpeg,.gif,.webp,.bmp,.svg' or filename|slice:"-5:" in '.jpeg' %}
-                            <button type="button" class="btn btn-primary btn-sm px-4 view-attachment-btn"
-                                    data-url="{{ voucher.attachment.url }}"
-                                    data-filename="{{ voucher.attachment.name|cut:'vouchers/attachments/' }}">
-                                View File
-                            </button>
-                        {% else %}
-                            <a href="{{ voucher.attachment.url }}" target="_blank" class="btn btn-primary btn-sm px-4">
-                                View File <i class="bi bi-box-arrow-up-right"></i>
-                            </a>
-                        {% endif %}
-                    {% endwith %}
-                </div>
+                <!-- MAIN ATTACHMENTS - MULTIPLE (REPLACES OLD SINGLE voucher.attachment) -->
+                {% if voucher.main_attachments.exists %}
+<div class="mb-4">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <strong class="text-success me-2">Main Attachment{{ voucher.main_attachments.count|pluralize }}</strong>
+        {% for att in voucher.main_attachments.all %}
+            {% with ext=att.file.name|lower|split:"."|last %}
+                {% if ext in "jpg,jpeg,png,gif,webp,bmp,svg,tif,tiff" %}
+                    <button type="button" class="btn btn-sm btn-outline-primary view-attachment-btn"
+                            data-url="{{ att.file.url }}"
+                            data-filename="{{ att.file.name|filename }}">
+                        View
+                    </button>
+                {% else %}
+                    <a href="{{ att.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                        Open
+                    </a>
                 {% endif %}
+            {% endwith %}
+        {% endfor %}
+        {% if voucher.main_attachments.count > 5 %}
+            <span class="badge bg-light text-dark border small">
+                +{{ voucher.main_attachments.count|add:"-5" }} more
+            </span>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
 
-                <!-- 3. PARTICULARS -->
+                <!-- 3. PARTICULARS - NOW SHOWS MULTIPLE ATTACHMENTS PER ROW -->
                 <div class="mb-4">
                     <h6 class="text-success fw-bold mb-3">Particulars</h6>
                     <div class="table-responsive">
@@ -130,24 +149,28 @@
                                 <tr>
                                     <td class="fw-medium">{{ p.description }}</td>
                                     <td>
-                                        {% if p.attachment %}
-                                            {% with filename=p.attachment.name|lower %}
-                                                {% if filename|slice:"-4:" in '.jpg,.png,.jpeg,.gif,.webp,.bmp,.svg' or filename|slice:"-5:" in '.jpeg' %}
-                                                    <button type="button" class="btn btn-sm btn-outline-primary view-attachment-btn"
-                                                            data-url="{{ p.attachment.url }}"
-                                                            data-filename="{{ p.attachment.name|cut:'vouchers/particulars/' }}">
+    {% if p.attachments.exists %}
+        <div class="d-flex flex-wrap gap-1">
+            {% for att in p.attachments.all %}
+                {% with ext=att.file.name|lower|split:"."|last %}
+                    {% if ext in "jpg,jpeg,png,gif,webp,bmp,svg,tif,tiff" %}
+                        <button type="button" class="btn btn-sm btn-outline-primary view-attachment-btn"
+                                                            data-url="{{ att.file.url }}"
+                                                            data-filename="{{ att.file.name|filename }}">
                                                         View
                                                     </button>
-                                                {% else %}
-                                                    <a href="{{ p.attachment.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
-                                                        View <i class="bi bi-box-arrow-up-right"></i>
-                                                    </a>
-                                                {% endif %}
-                                            {% endwith %}
-                                        {% else %}
-                                            <span class="text-muted">—</span>
-                                        {% endif %}
-                                    </td>
+                    {% else %}
+                        <a href="{{ att.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                            Open
+                        </a>
+                    {% endif %}
+                {% endwith %}
+            {% endfor %}
+        </div>
+    {% else %}
+        <span class="text-muted">—</span>
+    {% endif %}
+</td>
                                     <td class="text-end fw-bold text-success">₹{{ p.amount|floatformat:2 }}</td>
                                 </tr>
                                 {% empty %}
@@ -195,15 +218,9 @@
                         </a>
                     </div>
 
-                    <div class="progress" style="height: 32px; border-radius: 16px;">
-                        <div id="progress-bar" class="progress-bar bg-success fw-bold"
-                             style="width: {{ approval_percentage }}%">
-                            {{ voucher.approved_count|default:0 }} / {{ voucher.required_approvers|length }}
-                        </div>
+                    
                     </div>
-                    <small class="text-muted d-block mt-1">
-                        Required: {{ voucher.required_approvers|join:", " }}
-                    </small>
+                  
                 </div>
 
                 <!-- ONLY SHOW "Waiting for" IF PENDING -->
@@ -358,7 +375,7 @@
             body * { visibility: hidden; }
             #print-section, #print-section * { visibility: visible; }
             #print-section { position: absolute; left: 0; top: 0; width: 100%; }
-            .signature-img { max-height: 40px; margin: 8px 0; }
+            .signature-img { max-height: 80px; margin: 8px 0; }
             .signature-block { text-align: center; width: 30%; min-width: 160px; }
         }
         #print-section { display: none; }
@@ -370,7 +387,7 @@
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 15px;">
             <!-- LEFT: Payment Voucher + Details -->
             <div style="flex: 1;">
-                <h4 style="margin: 0 0 8px 0; font-weight: bold; text-transform: uppercase; font-size: 18px;">Payment Voucher</h4>
+                <h4 style="margin: margin: 0 0 8px 0; font-weight: bold; text-transform: uppercase; font-size: 18px;">Payment Voucher</h4>
                 <p style="margin: 4px 0; font-size: 13px;"><strong>Voucher No:</strong> {{ voucher.voucher_number }}</p>
                 <p style="margin: 4px 0; font-size: 13px;"><strong>Voucher Date:</strong> {{ voucher.voucher_date|date:"d M Y" }}</p>
                 <p style="margin: 4px 0; font-size: 13px;">
@@ -624,7 +641,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    // === EDIT BUTTON - NOW SHOWS CURRENT ATTACHMENT NAMES WHEN EDITING ===
+    // === EDIT BUTTON - FIXED: MULTIPLE FILES + KEEP OLD ONES ===
     const editBtn = document.getElementById('editVoucherBtn');
     if (editBtn) {
         editBtn.addEventListener('click', function () {
@@ -636,7 +653,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const bsModal = new bootstrap.Modal(createModal);
             bsModal.show();
 
-            createModal.addEventListener('shown.bs.modal', function () {
+            createModal.addEventListener('shown.bs.modal', function handler() {
                 const form = createModal.querySelector('form');
 
                 // Pre-fill basic fields
@@ -644,43 +661,42 @@ document.addEventListener('DOMContentLoaded', function () {
                 form.querySelector('[name="payment_type"]').value = '{{ voucher.payment_type }}';
                 form.querySelector('[name="name_title"]').value = '{{ voucher.name_title }}';
                 form.querySelector('[name="pay_to"]').value = '{{ voucher.pay_to }}';
-                form.querySelector('[name="cheque_number"]').value = '{{ voucher.cheque_number|default:"" }}';
+                if (form.querySelector('[name="cheque_number"]')) {
+                    form.querySelector('[name="cheque_number"]').value = '{{ voucher.cheque_number|default:"" }}';
+                }
 
-                // Clear particulars table and re-add rows with current file names
+                // Clear and rebuild particulars with correct file input name + show current files
                 const tbody = form.querySelector('#particularsTable tbody');
                 tbody.innerHTML = '';
+
                 {% for p in voucher.particulars.all %}
                 const row = tbody.insertRow();
                 row.innerHTML = `
-                    <td><input type="text" class="form-control form-control-sm" name="particulars[{{ forloop.counter0 }}][description]" value="{{ p.description }}" required></td>
                     <td>
-                        <input type="file" class="form-control form-control-sm" name="particulars[{{ forloop.counter0 }}][attachment]">
-                        {% if p.attachment %}
-                        <small class="text-muted d-block mt-1">Current: {{ p.attachment.name|cut:"vouchers/particulars/" }}</small>
+                        <input type="text" class="form-control form-control-sm" 
+                               name="particulars[{{ forloop.counter0 }}][description]" 
+                               value="{{ p.description }}" required>
+                    </td>
+                    <td>
+                        <input type="file" class="form-control form-control-sm" 
+                               name="particular_attachment_{{ forloop.counter0 }}" multiple accept="image/*,.pdf,.doc,.docx">
+                        {% if p.attachments.exists %}
+                            <small class="text-muted d-block mt-1">
+                                Current files: 
+                                {% for att in p.attachments.all %}
+                                    {{ att.file.name|filename }}{% if not forloop.last %}, {% endif %}
+                                {% endfor %}
+                            </small>
                         {% endif %}
                     </td>
-                    <td><input type="number" step="0.01" class="form-control form-control-sm amount-input" name="particulars[{{ forloop.counter0 }}][amount]" value="{{ p.amount }}" required></td>
+                    <td>
+                        <input type="number" step="0.01" class="form-control form-control-sm amount-input" 
+                               name="particulars[{{ forloop.counter0 }}][amount]" 
+                               value="{{ p.amount|floatformat:2 }}" required>
+                    </td>
                     <td><button type="button" class="btn btn-danger btn-sm remove-row">×</button></td>
                 `;
                 {% endfor %}
-
-                // Show current main attachment name
-                const mainAttachInput = form.querySelector('[name="attachment"]');
-                if (mainAttachInput && '{{ voucher.attachment }}') {
-                    mainAttachInput.insertAdjacentHTML('afterend', `
-                        <small class="text-muted d-block mt-1">Current Main Attachment: {{ voucher.attachment.name|cut:"vouchers/attachments/" }}</small>
-                    `);
-                }
-
-                // Show current cheque attachment name if CHEQUE
-                if ('{{ voucher.payment_type }}' === 'CHEQUE') {
-                    const chequeInput = form.querySelector('[name="cheque_attachment"]');
-                    if (chequeInput && '{{ voucher.cheque_attachment }}') {
-                        chequeInput.insertAdjacentHTML('afterend', `
-                            <small class="text-muted d-block mt-1">Current Cheque Attachment: {{ voucher.cheque_attachment.name|cut:"vouchers/cheques/" }}</small>
-                        `);
-                    }
-                }
 
                 // Change submit to update
                 form.onsubmit = function(e) {
@@ -702,11 +718,17 @@ document.addEventListener('DOMContentLoaded', function () {
                             alert('Error: ' + JSON.stringify(data));
                         }
                     })
-                    .catch(() => alert('Update failed'));
+                    .catch(err => {
+                        console.error(err);
+                        alert('Update failed. Check console.');
+                    });
                 };
 
                 form.querySelector('button[type="submit"]').textContent = 'Update Voucher';
-            }, { once: true });
+
+                // Remove this handler after first run
+                createModal.removeEventListener('shown.bs.modal', handler);
+            });
         });
     }
 });
@@ -723,9 +745,6 @@ document.addEventListener('keydown', function(e) {
 document.addEventListener('contextmenu', function(e) {
     e.preventDefault();
 });
-
-
-
 </script>
 
 <style>
