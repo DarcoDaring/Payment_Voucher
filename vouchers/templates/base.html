@@ -51,9 +51,7 @@
                             <ul class="dropdown-menu dropdown-menu-end shadow">
                                 {% if user.is_superuser %}
                                 <li><a class="dropdown-item" href="{% url 'admin:index' %}">Admin Panel</a></li>
-                                <li><a class="dropdown-item" data-bs-toggle="modal" data-bs-target="#approvalControlModal">Approval Control</a></li>
-                                <li><a class="dropdown-item" data-bs-toggle="modal" data-bs-target="#userControlModal">User Control</a></li>
-                                <li><hr class="dropdown-divider"></li>
+                                
                                 {% endif %}
                                 <li><a class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#logoutModal">Logout</a></li>
                             </ul>
