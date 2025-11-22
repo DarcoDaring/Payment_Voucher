@@ -415,22 +415,25 @@ class VoucherCreateAPI(APIView):
                     MainAttachment.objects.filter(voucher=voucher).delete()
                 for f in files.getlist('main_attachments'):
                     MainAttachment.objects.create(voucher=voucher, file=f)
-
                 # -------------------------------------------------
-                # 3. Cheque attachments (multiple, required only for CHEQUE)
+                # 3. Cheque attachments – FINAL FIXED VERSION (Create + Edit)
                 # -------------------------------------------------
                 if data['payment_type'] == 'CHEQUE':
-                    if not is_edit:
-                        ChequeAttachment.objects.filter(voucher=voucher).delete()
                     cheque_files = files.getlist('cheque_attachments')
-                    if not cheque_files and not is_edit:
-                        return Response({'error': 'At least one cheque attachment is required.'}, status=400)
-                    for f in cheque_files:
-                        ChequeAttachment.objects.create(voucher=voucher, file=f)
-                else:
-                    ChequeAttachment.objects.filter(voucher=voucher).delete()
 
-                # -------------------------------------------------
+                    if cheque_files:
+                        # User uploaded new cheque images → replace all old ones
+                        ChequeAttachment.objects.filter(voucher=voucher).delete()
+                        for f in cheque_files:
+                            ChequeAttachment.objects.create(voucher=voucher, file=f)
+
+                    # Always require at least one cheque attachment for CHEQUE payment
+                    if not ChequeAttachment.objects.filter(voucher=voucher).exists():
+                        return Response({'error': 'At least one cheque attachment is required.'}, status=400)
+
+                else:
+                    # Not cheque → remove any old cheque attachments
+                    ChequeAttachment.objects.filter(voucher=voucher).delete()
                 # 4. Particulars + attachments (the big fix!)
                 # -------------------------------------------------
                 # On create: delete old particulars

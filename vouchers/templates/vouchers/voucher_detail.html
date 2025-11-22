@@ -687,45 +687,38 @@ if (editBtn) {
             form.querySelector('[name="payment_type"]').value = VOUCHER_EDIT_DATA.payment_type;
             form.querySelector('[name="name_title"]').value = VOUCHER_EDIT_DATA.name_title;
             form.querySelector('[name="pay_to"]').value = VOUCHER_EDIT_DATA.pay_to;
-
-            // === CHEQUE FIELDS - FULL CONTROL ===
-            const chequeFields = document.querySelectorAll('.cheque-fields'); // Make sure your HTML has this class
+            // === CHEQUE FIELDS – NOW 100% PRE-LOADED ON EDIT ===
+            const chequeFields = document.querySelectorAll('#chequeNumberField, #chequeDateField, #accountDetailsField, #chequeAttachmentField');
             const chequeNumber = form.querySelector('[name="cheque_number"]');
             const chequeDate = form.querySelector('[name="cheque_date"]');
             const accountDetails = form.querySelector('[name="account_details"]');
-            const chequePreviewDiv = document.getElementById('current-cheque-attachments');
 
             if (VOUCHER_EDIT_DATA.payment_type === 'CHEQUE') {
-                // Show & fill cheque fields
-                chequeFields.forEach(el => el.style.display = 'block');
+                chequeFields.forEach(field => field.style.display = '');
 
                 if (chequeNumber) chequeNumber.value = VOUCHER_EDIT_DATA.cheque_number || '';
                 if (chequeDate) chequeDate.value = VOUCHER_EDIT_DATA.cheque_date || '';
-                if (accountDetails) accountDetails.value = VOUCHER_EDIT_DATA.account_details || '';
+                if (accountDetails) {
+                    accountDetails.value = VOUCHER_EDIT_DATA.account_details || '';
+                    accountDetails.dispatchEvent(new Event('change')); // in case options are loaded dynamically
+                }
 
-                // Show current cheque attachments
-                if (chequePreviewDiv) {
-                    if (VOUCHER_EDIT_DATA.cheque_attachments.length > 0) {
-                        chequePreviewDiv.innerHTML = `
-                            <div class="alert alert-info small mt-2">
-                                <strong>Current Cheque Attachments:</strong><br>
-                                ${VOUCHER_EDIT_DATA.cheque_attachments.map(f => 
-                                    `<span class="badge bg-secondary me-2">${f}</span>`
-                                ).join('')}
-                            </div>`;
-                    } else {
-                        chequePreviewDiv.innerHTML = '<small class="text-muted">No cheque attachments</small>';
-                    }
+                               // Super clean: only show current cheque filenames
+                const fileInput = form.querySelector('[name="cheque_attachments"]');
+                if (fileInput && VOUCHER_EDIT_DATA.cheque_attachments.length > 0) {
+                    const currentText = VOUCHER_EDIT_DATA.cheque_attachments.join(', ');
+                    const preview = `
+                        <div class="mt-1">
+                            <small class="text-muted">Current files: ${currentText}</small>
+                        </div>`;
+                    fileInput.insertAdjacentHTML('afterend', preview);
                 }
             } else {
-                // HIDE & CLEAR cheque fields for CASH / PETTY_CASH
-                chequeFields.forEach(el => el.style.display = 'none');
+                chequeFields.forEach(field => field.style.display = 'none');
                 if (chequeNumber) chequeNumber.value = '';
                 if (chequeDate) chequeDate.value = '';
                 if (accountDetails) accountDetails.value = '';
-                if (chequePreviewDiv) chequePreviewDiv.innerHTML = '';
             }
-
             // === REBUILD PARTICULARS ROWS ===
             VOUCHER_EDIT_DATA.particulars.forEach((p, i) => {
                 const row = tbody.insertRow();
@@ -748,6 +741,36 @@ if (editBtn) {
                     </td>
                 `;
             });
+                        // === MAIN ATTACHMENTS – Clean display + replace old ones ===
+            const mainFileInput = form.querySelector('[name="main_attachments"]');
+            if (mainFileInput) {
+                // Show current files (if any)
+                if (VOUCHER_EDIT_DATA.main_attachments && VOUCHER_EDIT_DATA.main_attachments.length > 0) {
+                    const current = VOUCHER_EDIT_DATA.main_attachments.join(', ');
+                    mainFileInput.insertAdjacentHTML('afterend', `
+                        <div class="mt-1"><small class="text-muted">Current: ${current}</small></div>
+                    `);
+                }
+                // This is the key: clear the file input so old files don't stay selected
+                mainFileInput.value = '';
+            }
+
+            // === CHEQUE ATTACHMENTS – Clean display + replace old ones ===
+            const chequeFileInput = form.querySelector('[name="cheque_attachments"]');
+            if (chequeFileInput && VOUCHER_EDIT_DATA.payment_type === 'CHEQUE') {
+                if (VOUCHER_EDIT_DATA.cheque_attachments.length > 0) {
+                    const current = VOUCHER_EDIT_DATA.cheque_attachments.join(', ');
+                    chequeFileInput.insertAdjacentHTML('afterend', `
+                        <div class="mt-1"><small class="text-muted">Current: ${current}</small></div>
+                    `);
+                }
+                chequeFileInput.value = '';  // clears the browser's "X files selected"
+            }
+
+            // === PARTICULAR ATTACHMENTS – Clear old selection ===
+            document.querySelectorAll('input[name^="particular_attachment_"]').forEach(input => {
+                input.value = '';
+            });
 
             // === FORM SUBMIT ===
             form.onsubmit = function(e) {
@@ -755,11 +778,13 @@ if (editBtn) {
                 const fd = new FormData(form);
                 fd.append('voucher_id', VOUCHER_EDIT_DATA.id);
 
-                fetch('/api/vouchers/create/', {
-                    method: 'POST',
-                    body: fd,
-                    headers: { 'X-CSRFToken': csrf }
-                })
+                const apiUrl = "{% url 'voucher_create_api' %}";
+
+fetch(apiUrl, {
+    method: 'POST',
+    body: fd,
+    headers: { 'X-CSRFToken': csrf }
+})
                 .then(r => r.json())
                 .then(d => {
                     if (d.success) {
