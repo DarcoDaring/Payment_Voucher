@@ -1245,11 +1245,11 @@ toggleChequeFields();
                     index = 1;
                     document.getElementById('successOkBtn').onclick = () => location.reload();
                 })
-                .catch(err => alert('Failed: ' + (err.error || JSON.stringify(err))));
+                
             };
         }
 
-                // === USER CONTROL & EDIT, COMPANY MODAL, ETC. (ALL REMAIN 100% UNCHANGED) ===
+           
         // === COMPANY DETAILS SAVE - FIXED & WORKING ===
         const companyForm = document.getElementById('companyDetailsForm');
         if (companyForm) {
