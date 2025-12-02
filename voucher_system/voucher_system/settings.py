@@ -11,12 +11,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # -----------------------------
 # Security
 # -----------------------------
-SECRET_KEY = os.getenv("SECRET_KEY", "your-local-secret-key")
+SECRET_KEY = os.getenv("SECRET_KEY")  # No fallback in prod; set env var on Render
 
 DEBUG = os.getenv("RENDER", None) is None   # DEBUG=False on Render, True on local
 
+# Updated: Include Render's specific hostname
 ALLOWED_HOSTS = [
-    ".onrender.com",
+    os.getenv('RENDER_EXTERNAL_HOSTNAME', '.onrender.com'),  # Covers Render + local
     "localhost",
     "127.0.0.1",
 ]
@@ -41,7 +42,7 @@ INSTALLED_APPS = [
 # -----------------------------
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # Must be after SecurityMiddleware
     
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -126,28 +127,43 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+# Optional: Example for S3 media storage (add 'storages' to INSTALLED_APPS and requirements.txt)
+# if os.getenv('USE_S3'):  # Set this env var on Render if using S3
+#     import boto3
+#     from storages.backends.s3boto3 import S3Boto3Storage
+#     AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+#     AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+#     AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME')
+#     AWS_S3_REGION_NAME = 'us-east-1'  # Your region
+#     AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+#     AWS_DEFAULT_ACL = None
+#     AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
+#     AWS_LOCATION = 'media'
+#     DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+#     MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/{AWS_LOCATION}/'
+
 # -----------------------------
-# Logging
+# Logging (Updated: Console-only for Render)
 # -----------------------------
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'handlers': {
-        'file': {
-            'level': 'DEBUG',
-            'class': 'logging.FileHandler',
-            'filename': BASE_DIR / "debug.log",
-        },
-        'console': {
-            'level': 'DEBUG',
+        'console': {  # Removed file handler to avoid write errors on Render
+            'level': 'DEBUG' if DEBUG else 'INFO',
             'class': 'logging.StreamHandler',
         },
     },
     'loggers': {
         'vouchers': {
-            'handlers': ['file', 'console'],
-            'level': 'DEBUG',
+            'handlers': ['console'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': True,
+        },
+        'django': {  # Optional: Log Django errors to console
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
         },
     },
 }
