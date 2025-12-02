@@ -462,18 +462,19 @@ class VoucherCreateAPI(APIView):
                 else:
                     # Not cheque → remove any old cheque attachments
                     ChequeAttachment.objects.filter(voucher=voucher).delete()
-                # 4. Particulars + attachments (FIXED)
                 # -------------------------------------------------
-                # On EDIT: delete old particulars AND their physical files
-                if is_edit:
-                    # Delete physical files first
-                    for particular in voucher.particulars.all():
-                        for attachment in particular.attachments.all():
-                            if attachment.file:
-                                attachment.file.delete(save=False)
-                    # Then delete database records
-                    voucher.particulars.all().delete()
+                # 4. Particulars + attachments (UPDATED FOR PROPER EDIT SUPPORT)
+                # -------------------------------------------------
+                # REMOVED: Unconditional deletion of old particulars in edit mode
+                # Now: Update/create/delete based on sent data (assumes frontend sends in existing order)
+
                 i = 0
+                if is_edit:
+                    # Get existing particulars in consistent order (adjust order_by if needed, e.g., 'created_at')
+                    existing_particulars = list(voucher.particulars.order_by('id'))
+                else:
+                    existing_particulars = []
+
                 while f"particulars[{i}][description]" in data:
                     desc = data[f"particulars[{i}][description]"].strip()
                     amt_str = data[f"particulars[{i}][amount]"].strip()
@@ -489,37 +490,64 @@ class VoucherCreateAPI(APIView):
                     except InvalidOperation:
                         return Response({f'particular_{i}': 'Invalid amount'}, status=400)
 
-                    # Create new particular (works for both create and edit now)
-                    particular = Particular(voucher=voucher, description=desc, amount=amount)
-                    particular.save()
-
-                    # ---- Attachments handling (FIXED) ----
                     new_files = files.getlist(f'particular_attachment_{i}')
 
-                    if new_files:
-                        # User uploaded new files → create them
-                        for f in new_files:
-                            ParticularAttachment.objects.create(particular=particular, file=f)
+                    if i < len(existing_particulars):
+                        # UPDATE existing particular
+                        particular = existing_particulars[i]
+                        particular.description = desc
+                        particular.amount = amount
+                        particular.save()
+
+                        if new_files:
+                            # REPLACE attachments: delete old physical files and DB records
+                            for attachment in particular.attachments.all():
+                                if attachment.file:
+                                    attachment.file.delete(save=False)
+                            particular.attachments.all().delete()
+                            # Add new ones
+                            for f in new_files:
+                                ParticularAttachment.objects.create(particular=particular, file=f)
+                        # ELSE: Keep existing attachments (no error!)
+
                     else:
-                        # No new files uploaded
-                        if not is_edit:
-                            # CREATE mode: require at least one attachment
+                        # CREATE new particular
+                        particular = Particular(voucher=voucher, description=desc, amount=amount)
+                        particular.save()
+
+                        if not new_files:
                             return Response(
-                                {f'particular_{i}': 'At least one attachment required'},
+                                {f'particular_{i}': 'At least one attachment required for new particular'},
                                 status=400
                             )
-                        # EDIT mode: This shouldn't happen since we deleted old particulars
-                        # But if it does, it means frontend didn't send files - show error
-                        return Response(
-                            {f'particular_{i}': 'At least one attachment required (files missing from form)'},
-                            status=400
-                        )
+                        # Add attachments
+                        for f in new_files:
+                            ParticularAttachment.objects.create(particular=particular, file=f)
 
                     i += 1
 
+                # DELETE extra existing particulars (if frontend sent fewer)
+                for j in range(i, len(existing_particulars)):
+                    extra = existing_particulars[j]
+                    # Delete physical files first
+                    for attachment in extra.attachments.all():
+                        if attachment.file:
+                            attachment.file.delete(save=False)
+                    # Then delete DB records
+                    extra.attachments.all().delete()
+                    extra.delete()
+
+                # Final validation: at least one particular
                 if voucher.particulars.count() == 0:
                     return Response({'error': 'At least one particular is required.'}, status=400)
                 
+                # Optional: Ensure every particular has at least one attachment (catches edge cases like replacing with empty)
+                for particular in voucher.particulars.all():
+                    if not particular.attachments.exists():
+                        return Response({
+                            'error': f'Particular "{particular.description[:50]}..." requires at least one attachment.'
+                        }, status=400)
+
                 action = "updated" if is_edit else "created"
                 return Response({
                     'success': True,
