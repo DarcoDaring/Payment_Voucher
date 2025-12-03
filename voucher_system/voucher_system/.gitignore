@@ -98,3 +98,9 @@ ENV/
 # === ADD THIS LINE BELOW ===
 # Media files (user uploads) - NEVER commit
 media/
+venv/
+__pycache__/
+*.pyc
+db.sqlite3
+*.log
+/staticfiles/

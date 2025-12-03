@@ -1,1 +1,1 @@
-web: gunicorn voucher_system.wsgi:application --bind 0.0.0.0:$PORT
+web: gunicorn voucher_system.wsgi --log-file -
