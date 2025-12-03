@@ -2,13 +2,12 @@
 {% load static %}
 
 {% block content %}
-    {% if not user.is_authenticated %}
-        <div class="d-flex justify-content-center align-items-center min-vh-100">
-            <a href="{% url 'login' %}" class="btn btn-primary btn-lg px-5 py-3 shadow-lg">
-                Login
-            </a>
-        </div>
-    {% else %}
+   {% if not user.is_authenticated %}
+    <script>
+        // Redirect to login page immediately
+        window.location.href = "{% url 'login' %}";
+    </script>
+{% else %}
         <div class="container mt-5">
             <div class="text-center">
 
@@ -29,7 +28,7 @@
 
                 <!-- SUPERUSER-ONLY CONTROL PANEL -->
                 {% if user.is_superuser %}
-                    <h4 class="text-muted mb-5">Admin Control Panel</h4>
+                   
 
                     <!-- 4 BOXES -->
                     <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-4 justify-content-center">
